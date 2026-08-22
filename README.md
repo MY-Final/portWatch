@@ -8,6 +8,7 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 ## 当前支持
 
 - 查询一个端口：`portwatch 8080`
+- 查询端口范围：`portwatch 3000-4000`
 - 列出全部 TCP `LISTENING` 端口：`portwatch`
 - 释放端口：`portwatch free 8080`
 - 按 PID 终止进程：`portwatch kill 1234`
@@ -55,6 +56,9 @@ portwatch 8080
 ```powershell
 # 查看 8080 端口
 portwatch 8080
+
+# 查看 3000 到 4000 范围内的监听端口
+portwatch 3000-4000
 
 # 查看全部监听端口
 portwatch

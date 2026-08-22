@@ -56,3 +56,9 @@ Each future card is intentionally isolated in its own files and must not be sche
 | 701-702 | done | `af2c46c` |
 | 801-802 | done | `f7d7902` |
 | 901-902 | done | `68dcee1` |
+
+## V3 Active Planning
+
+| Task | 状态 | 文档 |
+| --- | --- | --- |
+| V3-1001 | implementation started | [`phase-10-v3/1001-port-range.md`](phase-10-v3/1001-port-range.md) |

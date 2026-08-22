@@ -42,6 +42,7 @@ type Action uint8
 const (
 	ActionList Action = iota
 	ActionPort
+	ActionPortRange
 	ActionFree
 	ActionKill
 	ActionFind
@@ -54,11 +55,12 @@ const (
 // Command is the parsed root command. Port is set for ActionPort and
 // ActionFree; ActionList represents an invocation with no arguments.
 type Command struct {
-	Action Action
-	Port   int
-	PID    int
-	Query  string
-	Flags  flagOptions
+	Action  Action
+	Port    int
+	PortEnd int
+	PID     int
+	Query   string
+	Flags   flagOptions
 }
 
 // Parse parses root arguments without executing any platform work.
@@ -98,6 +100,13 @@ func Parse(args []string) (Command, error) {
 			return Command{Action: ActionTUI, Flags: options}, nil
 		case "free":
 			return Command{}, &ParseError{Kind: ParseErrorFree, Argument: arg, Message: "free requires a port"}
+		}
+		if strings.Contains(arg, "-") {
+			start, end, rangeErr := parsePortRange(arg)
+			if rangeErr != nil {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: arg, Message: rangeErr.Error()}
+			}
+			return Command{Action: ActionPortRange, Port: start, PortEnd: end, Flags: options}, nil
 		}
 		port, err := strconv.Atoi(arg)
 		if err != nil || port < 1 || port > 65535 {
@@ -185,6 +194,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		_, _ = fmt.Fprintln(stdout, "       portwatch free <port>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch kill <pid>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch find <name>")
+		_, _ = fmt.Fprintln(stdout, "       portwatch <start-end>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch watch")
 		_, _ = fmt.Fprintln(stdout, "       portwatch tui")
 		_, _ = fmt.Fprintln(stdout, "Flags: --json --interval <duration> --protocol tcp")
@@ -205,6 +215,8 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		return runList(ctx, deps, command.Flags.JSON, stdout, stderr)
 	case ActionPort:
 		return runPort(ctx, deps, command.Port, command.Flags.JSON, stdout, stderr)
+	case ActionPortRange:
+		return runPortRange(ctx, deps, command.Port, command.PortEnd, command.Flags.JSON, stdout, stderr)
 	case ActionFree:
 		freeOutput := stdout
 		if command.Flags.JSON {
@@ -254,6 +266,19 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		PrintError(stderr, err)
 		return ExitCode(err)
 	}
+}
+
+func parsePortRange(value string) (int, int, error) {
+	parts := strings.Split(value, "-")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return 0, 0, fmt.Errorf("port range must use START-END with values from 1 to 65535")
+	}
+	start, startErr := strconv.Atoi(parts[0])
+	end, endErr := strconv.Atoi(parts[1])
+	if startErr != nil || endErr != nil || start < 1 || end > 65535 || start > end {
+		return 0, 0, fmt.Errorf("port range must use START-END with values from 1 to 65535")
+	}
+	return start, end, nil
 }
 
 func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr io.Writer) int {
@@ -328,6 +353,42 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 				return ExitCode(renderErr)
 			}
 		}
+	}
+	return ExitSuccess
+}
+
+func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON bool, stdout, stderr io.Writer) int {
+	ports, err := deps.Scanner.List(ctx)
+	if err != nil {
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+	filtered := make([]model.PortInfo, 0)
+	for _, record := range ports {
+		if record.Port >= start && record.Port <= end {
+			filtered = append(filtered, record)
+		}
+	}
+	infos := make(map[int]model.ProcessInfo, len(filtered))
+	for i := range filtered {
+		info, infoErr := deps.Manager.Info(ctx, filtered[i].PID)
+		if infoErr != nil {
+			PrintError(stderr, infoErr)
+			continue
+		}
+		infos[filtered[i].PID] = info
+		filtered[i].ProcessName = info.Name
+	}
+	if asJSON {
+		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
+			PrintError(stderr, err)
+			return ExitCode(err)
+		}
+		return ExitSuccess
+	}
+	if err := RenderPortsWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
+		PrintError(stderr, err)
+		return ExitCode(err)
 	}
 	return ExitSuccess
 }
