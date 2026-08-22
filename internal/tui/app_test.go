@@ -18,3 +18,15 @@ func TestModelViewAndQuit(t *testing.T) {
 		t.Fatal("q did not return quit command")
 	}
 }
+
+func TestModelDetailsAndKillConfirmation(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{{Port: 8080, Protocol: "TCP", PID: 1, ProcessName: "demo.exe"}}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if updated.(Model).Detail == "" {
+		t.Fatal("enter did not show details")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if !updated.(Model).ConfirmKill {
+		t.Fatal("k did not request confirmation")
+	}
+}

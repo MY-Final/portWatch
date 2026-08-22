@@ -51,8 +51,8 @@ Each future card is intentionally isolated in its own files and must not be sche
 | 201-202 | done | current Phase 2 commit |
 | 301-302 | done | current Phase 3 commit |
 | 401-402 | done | current Phase 4 commit |
-| 501-502 | done | current TUI commit |
-| 601-602 | done | current service detector commit |
-| 701-702 | done | current Linux implementation commit |
-| 801-802 | done | current Darwin implementation commit |
-| 901-902 | done | current release commit |
+| 501-502 | done | pending current commit |
+| 601-602 | done | pending current commit |
+| 701-702 | done | pending current commit |
+| 801-802 | done | `f7d7902` |
+| 901-902 | done | `68dcee1` |

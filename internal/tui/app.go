@@ -14,11 +14,14 @@ import (
 )
 
 type Model struct {
-	Scanner port.Scanner
-	Manager process.Manager
-	Ports   []model.PortInfo
-	Filter  string
-	Err     error
+	Scanner     port.Scanner
+	Manager     process.Manager
+	Ports       []model.PortInfo
+	Filter      string
+	Err         error
+	Selected    int
+	Detail      string
+	ConfirmKill bool
 }
 
 type portsLoadedMsg struct{ ports []model.PortInfo }
@@ -43,14 +46,7 @@ func (m Model) refresh() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch value := msg.(type) {
 	case tea.KeyMsg:
-		switch value.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "r":
-			return m, m.refresh()
-		case "/":
-			return m, nil
-		}
+		return m.handleKey(value)
 	case portsLoadedMsg:
 		m.Ports, m.Err = value.ports, nil
 		sort.Slice(m.Ports, func(i, j int) bool { return m.Ports[i].Port < m.Ports[j].Port })
@@ -66,6 +62,12 @@ func (m Model) View() string {
 	}
 	var b strings.Builder
 	b.WriteString("PortWatch\n\nPORT   PROTOCOL   PID      PROCESS\n")
+	if m.ConfirmKill {
+		b.WriteString("Kill selected process? Y/N\n")
+	}
+	if m.Detail != "" {
+		b.WriteString(m.Detail + "\n")
+	}
 	for _, record := range m.Ports {
 		if m.Filter != "" && !strings.Contains(strings.ToLower(record.ProcessName), strings.ToLower(m.Filter)) {
 			continue

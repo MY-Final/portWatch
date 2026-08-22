@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,9 +73,31 @@ func parseProcTCP(path string) ([]model.PortInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
-		rows = append(rows, model.PortInfo{Port: port, Protocol: "TCP", LocalAddr: address, State: "LISTENING"})
+		rows = append(rows, model.PortInfo{Port: port, Protocol: "TCP", LocalAddr: address, State: "LISTENING", PID: findSocketPID(fields[9])})
 	}
 	return rows, scanner.Err()
+}
+
+func findSocketPID(inode string) int {
+	target := "socket:[" + inode + "]"
+	entries, _ := os.ReadDir("/proc")
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := strconv.Atoi(entry.Name()); err != nil {
+			continue
+		}
+		fds, _ := filepath.Glob(filepath.Join("/proc", entry.Name(), "fd", "*"))
+		for _, fd := range fds {
+			link, err := os.Readlink(fd)
+			if err == nil && link == target {
+				pid, _ := strconv.Atoi(entry.Name())
+				return pid
+			}
+		}
+	}
+	return 0
 }
 
 func parseProcAddress(value string) (string, int, error) {
