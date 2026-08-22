@@ -51,8 +51,8 @@ Each future card is intentionally isolated in its own files and must not be sche
 | 201-202 | done | current Phase 2 commit |
 | 301-302 | done | current Phase 3 commit |
 | 401-402 | done | current Phase 4 commit |
-| 501-502 | done | pending current commit |
-| 601-602 | done | pending current commit |
-| 701-702 | done | pending current commit |
+| 501-502 | done | `af2c46c` |
+| 601-602 | done | `af2c46c` |
+| 701-702 | done | `af2c46c` |
 | 801-802 | done | `f7d7902` |
 | 901-902 | done | `68dcee1` |
