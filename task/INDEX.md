@@ -64,3 +64,8 @@ Each future card is intentionally isolated in its own files and must not be sche
 | V3-1001 | done | [`phase-10-v3/1001-port-range.md`](phase-10-v3/1001-port-range.md) |
 | V3-1002 | done | [`phase-10-v3/1002-windows-udp.md`](phase-10-v3/1002-windows-udp.md) |
 | V3-1003 | done | [`phase-10-v3/1003-json-watch.md`](phase-10-v3/1003-json-watch.md) |
+
+## V4 Product Planning
+
+V4 的产品范围、JSON 合同、退出码、安全边界和建议任务拆分见
+[`../prd/v4.md`](../prd/v4.md)。V4 任务默认不立即执行，必须由主控 Agent 按依赖关系调度。

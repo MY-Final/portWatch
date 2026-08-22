@@ -116,6 +116,43 @@ func TestRefreshUsesModelContext(t *testing.T) {
 	}
 }
 
+type countingTUIManager struct {
+	infoCalls int
+}
+
+func (m *countingTUIManager) Info(context.Context, int) (model.ProcessInfo, error) {
+	m.infoCalls++
+	return model.ProcessInfo{Name: "demo.exe"}, nil
+}
+func (m *countingTUIManager) Exists(context.Context, int) (bool, error) { return true, nil }
+func (m *countingTUIManager) Terminate(context.Context, int) error      { return nil }
+
+type duplicatePIDScanner struct{}
+
+func (duplicatePIDScanner) List(context.Context) ([]model.PortInfo, error) {
+	return []model.PortInfo{
+		{Port: 3000, PID: 42},
+		{Port: 8080, PID: 42},
+	}, nil
+}
+func (duplicatePIDScanner) Port(context.Context, int) ([]model.PortInfo, error) { return nil, nil }
+
+func TestRefreshCachesProcessInfoByPID(t *testing.T) {
+	manager := &countingTUIManager{}
+	m := New(duplicatePIDScanner{}, manager)
+	message := m.Init()()
+	loaded, ok := message.(portsLoadedMsg)
+	if !ok {
+		t.Fatalf("Init() message = %T, want portsLoadedMsg", message)
+	}
+	if manager.infoCalls != 1 {
+		t.Fatalf("Info() calls = %d, want 1", manager.infoCalls)
+	}
+	if loaded.ports[0].ProcessName != "demo.exe" || loaded.ports[1].ProcessName != "demo.exe" {
+		t.Fatalf("cached process names = %#v", loaded.ports)
+	}
+}
+
 func TestRunProgramStartsAndExitsFromInput(t *testing.T) {
 	scanner := &tuiContextScanner{}
 	ctx, cancel := context.WithCancel(context.Background())

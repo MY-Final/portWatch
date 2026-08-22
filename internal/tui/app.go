@@ -54,12 +54,21 @@ func (m Model) refresh() tea.Cmd {
 			return portsFailedMsg{err: err}
 		}
 		infos := make(map[int]model.ProcessInfo, len(ports))
+		infoErrors := make(map[int]error)
 		for i := range ports {
 			if m.Manager == nil || ports[i].PID <= 0 {
 				continue
 			}
+			if info, ok := infos[ports[i].PID]; ok {
+				ports[i].ProcessName = info.Name
+				continue
+			}
+			if _, ok := infoErrors[ports[i].PID]; ok {
+				continue
+			}
 			info, infoErr := m.Manager.Info(ctx, ports[i].PID)
 			if infoErr != nil {
+				infoErrors[ports[i].PID] = infoErr
 				continue
 			}
 			infos[ports[i].PID] = info
