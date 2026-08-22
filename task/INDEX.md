@@ -52,7 +52,7 @@ Each future card is intentionally isolated in its own files and must not be sche
 | 301-302 | done | current Phase 3 commit |
 | 401-402 | done | current Phase 4 commit |
 | 501-502 | pending | - |
-| 601-602 | pending | - |
-| 701-702 | pending | - |
-| 801-802 | pending | - |
+| 601-602 | done | current service detector commit |
+| 701-702 | done | current Linux implementation commit |
+| 801-802 | done | current Darwin implementation commit |
 | 901-902 | pending | - |

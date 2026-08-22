@@ -38,6 +38,7 @@ type WindowsScanner struct{}
 
 // NewWindowsScanner returns a scanner for the current Windows host.
 func NewWindowsScanner() *WindowsScanner { return &WindowsScanner{} }
+func NewScanner() Scanner                { return NewWindowsScanner() }
 
 var _ Scanner = (*WindowsScanner)(nil)
 
