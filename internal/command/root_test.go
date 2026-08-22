@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -156,6 +157,22 @@ func TestRunRejectsZeroWatchInterval(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "watch interval must be positive") {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunFreeJSONKeepsStdoutAsJSON(t *testing.T) {
+	deps := Dependencies{Scanner: &freeScanner{}, Manager: &freeManager{}}
+	var stdout, stderr strings.Builder
+	code := run(context.Background(), []string{"--json", "free", "8080"}, deps, strings.NewReader(""), &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("run() code = %d, want %d", code, ExitSuccess)
+	}
+	var response model.FreeResponse
+	if err := json.Unmarshal([]byte(stdout.String()), &response); err != nil {
+		t.Fatalf("stdout JSON error = %v; stdout=%q; stderr=%q", err, stdout.String(), stderr.String())
+	}
+	if response.Status != "available" || response.Port != 8080 {
+		t.Fatalf("response = %+v", response)
 	}
 }
 

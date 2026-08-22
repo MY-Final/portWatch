@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/portwatch/portwatch/internal/service"
 	"github.com/portwatch/portwatch/pkg/model"
 )
 
@@ -56,5 +57,21 @@ func TestFindJSONIsValidAndSorted(t *testing.T) {
 	}
 	if got := response.Processes[0].Ports; len(got) != 2 || got[0] != 3000 || got[1] != 8080 {
 		t.Fatalf("ports = %v", got)
+	}
+}
+
+func TestRenderJSONWithServicesIncludesDetection(t *testing.T) {
+	var out bytes.Buffer
+	ports := []model.PortInfo{{Port: 5173, Protocol: "TCP", PID: 12}}
+	infos := map[int]model.ProcessInfo{12: {PID: 12, Name: "node.exe", Command: "vite --host"}}
+	if err := RenderJSONWithServices(&out, ports, infos, service.Rules{}); err != nil {
+		t.Fatalf("RenderJSONWithServices() error = %v", err)
+	}
+	var response model.PortsResponse
+	if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+		t.Fatalf("JSON decode error = %v", err)
+	}
+	if len(response.Ports) != 1 || response.Ports[0].Service == nil || response.Ports[0].Service.Name != "Vite" {
+		t.Fatalf("response = %+v", response)
 	}
 }
