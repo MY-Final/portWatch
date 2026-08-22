@@ -19,12 +19,12 @@
 | 002 | **done** | `002-domain-model.md` | `pkg/model/*.go` | 001 | Luna-002 | `69f99a0` | `go test ./pkg/model`; `go test ./...`; `go build ./...` |
 | 003 | **done** | `003-cli-root.md` | `internal/command/root.go`, `cmd/portwatch/main.go` 初稿 | 001, 002 | Luna-003 | `5f3e697` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 004 | **done** | `004-port-scanner-interface.md` | `internal/port/scanner.go` | 002 | Luna-004 | `6f9b88b` | `go test ./...`; `go build ./...`; `git diff --check` |
-| 005 | **running** | `005-windows-port-scanner.md` | `internal/port/windows.go` | 004 | Luna-005 | - | - |
+| 005 | **done** | `005-windows-port-scanner.md` | `internal/port/windows.go` | 004 | Luna-005 | `cdcc92b` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 006 | **done** | `006-process-manager-interface.md` | `internal/process/manager.go` | 002 | Luna-006 | `12cda8d` | `go test ./...`; `go build ./...`; `git diff --check` |
-| 007 | **running** | `007-windows-process-info.md` | `internal/process/windows.go` | 006 | Luna-007 | - | - |
-| 008 | pending | `008-kill-process.md` | `internal/process/windows.go` tests/termination additions | 006, 007 | - | - | - |
+| 007 | **done** | `007-windows-process-info.md` | `internal/process/windows.go` | 006 | Luna-007 | `930bc88` | `go test -mod=mod ./...`; `go build -mod=mod ./...`; `git diff --check` |
+| 008 | **running** | `008-kill-process.md` | `internal/process/windows.go` tests/termination additions | 006, 007 | Luna-008 | - | - |
 | 009 | pending | `009-free-port-command.md` | `internal/command/free.go` | 003, 004, 006, 007, 008 | - | - | - |
-| 010 | **running** | `010-output-table.md` | `internal/command/output.go` | 002, 003 | Luna-010 | - | - |
+| 010 | **done** | `010-output-table.md` | `internal/command/output.go` | 002, 003 | Luna-010 | `fa50537` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 011 | **running** | `011-error-handling.md` | `internal/command/errors.go` | 003, 004, 006 | Luna-011 | - | - |
 | 012 | pending | `012-unit-tests.md` | `*_test.go` beside owned packages | 002-011 | - | - | - |
 | 013 | pending | `013-mvp-integration.md` | final wiring in `cmd/portwatch/main.go`, README | 009-012 | - | - | - |
