@@ -10,6 +10,6 @@ portwatch --json 3000-4000
 portwatch --ports 3000,8080,8848
 ```
 
-UDP 已进入当前实现；JSON watch 不属于当前任务。
+UDP 和 JSON watch 已进入当前实现。
 
 UDP 任务卡：[`1002-windows-udp.md`](1002-windows-udp.md)

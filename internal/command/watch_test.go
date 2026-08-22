@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -44,6 +45,26 @@ func TestWatchEnrichesProcessName(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "TCP 8080 PID=12 node.exe") {
 		t.Fatalf("output = %q", out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("error output = %q", errOut.String())
+	}
+}
+
+func TestWatchJSONEmitsSchemaVersionedEvents(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, errOut strings.Builder
+	err := WatchJSON(ctx, watchCommandScanner{record: model.PortInfo{Port: 8080, Protocol: "TCP", State: "LISTENING", PID: 12}}, watchCommandManager{cancel: cancel}, time.Millisecond, 0, &out, &errOut)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("WatchJSON() error = %v, want context.Canceled", err)
+	}
+	var event model.WatchEventResponse
+	if err := json.Unmarshal([]byte(out.String()), &event); err != nil {
+		t.Fatalf("event JSON error = %v; output=%q", err, out.String())
+	}
+	if event.SchemaVersion != model.JSONSchemaVersion || event.Event != "added" || event.Port != 8080 || event.ProcessName != "node.exe" {
+		t.Fatalf("event = %+v", event)
 	}
 	if errOut.Len() != 0 {
 		t.Fatalf("error output = %q", errOut.String())

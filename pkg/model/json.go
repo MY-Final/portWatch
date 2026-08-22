@@ -47,6 +47,18 @@ type FindResponse struct {
 	Processes     []ProcessResult `json:"processes"`
 }
 
+// WatchEventResponse is one machine-readable port change event.
+type WatchEventResponse struct {
+	SchemaVersion string `json:"schema_version"`
+	Event         string `json:"event"`
+	ObservedAt    string `json:"observed_at"`
+	Port          int    `json:"port"`
+	Protocol      string `json:"protocol"`
+	State         string `json:"state"`
+	PID           int    `json:"pid"`
+	ProcessName   string `json:"process_name"`
+}
+
 type ServiceResult struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`

@@ -274,7 +274,12 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		}
 		return ExitCode(err)
 	case ActionWatch:
-		err := Watch(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, stdout, stderr)
+		var err error
+		if command.Flags.JSON {
+			err = WatchJSON(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, stdout, stderr)
+		} else {
+			err = Watch(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, stdout, stderr)
+		}
 		if err != nil && !errors.Is(err, context.Canceled) {
 			PrintError(stderr, err)
 		}

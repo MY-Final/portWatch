@@ -63,3 +63,4 @@ Each future card is intentionally isolated in its own files and must not be sche
 | --- | --- | --- |
 | V3-1001 | done | [`phase-10-v3/1001-port-range.md`](phase-10-v3/1001-port-range.md) |
 | V3-1002 | done | [`phase-10-v3/1002-windows-udp.md`](phase-10-v3/1002-windows-udp.md) |
+| V3-1003 | done | [`phase-10-v3/1003-json-watch.md`](phase-10-v3/1003-json-watch.md) |

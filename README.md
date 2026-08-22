@@ -17,6 +17,7 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 - JSON 输出：`portwatch --json 8080`
 - JSON 搜索：`portwatch --json find node`
 - 实时监听端口变化：`portwatch --interval 2s watch`
+- JSON 监听事件：`portwatch --json watch`
 - 只监听一个端口：`portwatch watch 8080`
 - 交互式终端界面：`portwatch tui`
 - `--help`、`--version` 和 `--protocol tcp|udp|all`
@@ -82,6 +83,9 @@ portwatch --interval 2s watch
 # 只监控 8080 端口
 portwatch watch 8080
 
+# 以 JSON Lines 输出端口变化
+portwatch --json watch
+
 # 搜索名称包含 node 的进程
 portwatch find node
 
@@ -109,6 +113,7 @@ JSON 响应顶层包含 `schema_version`。当前版本为 `"2"`，端口结果�
 ```
 
 `--json free` 和 `--json find <name>` 也使用同一个 schema 版本字段。
+`--json watch` 使用 JSON Lines：每行是一个独立事件对象，包含 `event`、`observed_at`、端口、协议、PID 和进程名。
 
 所有全局选项应放在位置参数或子命令之前，例如使用
 `portwatch --json 8080`，不要写成 `portwatch 8080 --json`。

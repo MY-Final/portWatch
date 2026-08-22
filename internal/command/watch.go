@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,15 @@ import (
 )
 
 func Watch(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, out, errOut io.Writer) error {
+	return watchOutput(ctx, scanner, manager, interval, portNumber, false, out, errOut)
+}
+
+// WatchJSON writes one JSON object per port change event.
+func WatchJSON(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, out, errOut io.Writer) error {
+	return watchOutput(ctx, scanner, manager, interval, portNumber, true, out, errOut)
+}
+
+func watchOutput(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, asJSON bool, out, errOut io.Writer) error {
 	if out == nil || errOut == nil {
 		return errors.New("watch output writer is nil")
 	}
@@ -48,6 +58,18 @@ func Watch(ctx context.Context, scanner port.Scanner, manager process.Manager, i
 		sign := "+"
 		if event.Kind == watch.Removed {
 			sign = "-"
+		}
+		if asJSON {
+			return json.NewEncoder(out).Encode(model.WatchEventResponse{
+				SchemaVersion: model.JSONSchemaVersion,
+				Event:         string(event.Kind),
+				ObservedAt:    event.ObservedAt.UTC().Format(time.RFC3339Nano),
+				Port:          event.Port.Port,
+				Protocol:      event.Port.Protocol,
+				State:         event.Port.State,
+				PID:           event.Port.PID,
+				ProcessName:   processName,
+			})
 		}
 		_, err := fmt.Fprintf(out, "%s %s %s %d PID=%d %s\n", sign, event.ObservedAt.Format("15:04:05"), event.Port.Protocol, event.Port.Port, event.Port.PID, processName)
 		return err
