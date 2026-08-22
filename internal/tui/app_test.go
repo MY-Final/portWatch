@@ -89,3 +89,28 @@ func TestModelKillVerificationFailureIsShown(t *testing.T) {
 		t.Fatal("expected verification error")
 	}
 }
+
+type tuiContextScanner struct {
+	seen context.Context
+}
+
+func (s *tuiContextScanner) List(ctx context.Context) ([]model.PortInfo, error) {
+	s.seen = ctx
+	return nil, nil
+}
+func (s *tuiContextScanner) Port(context.Context, int) ([]model.PortInfo, error) { return nil, nil }
+
+func TestRefreshUsesModelContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	scanner := &tuiContextScanner{}
+	m := New(scanner, nil)
+	m.Context = ctx
+	msg := m.Init()()
+	if _, ok := msg.(portsLoadedMsg); !ok {
+		t.Fatalf("Init() message = %T, want portsLoadedMsg", msg)
+	}
+	if scanner.seen != ctx {
+		t.Fatal("refresh did not use model context")
+	}
+}

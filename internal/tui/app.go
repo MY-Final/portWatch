@@ -15,6 +15,7 @@ import (
 )
 
 type Model struct {
+	Context     context.Context
 	Scanner     port.Scanner
 	Manager     process.Manager
 	Ports       []model.PortInfo
@@ -36,14 +37,18 @@ type portsFailedMsg struct{ err error }
 type killDoneMsg struct{ err error }
 
 func New(scanner port.Scanner, manager process.Manager) Model {
-	return Model{Scanner: scanner, Manager: manager}
+	return Model{Context: context.Background(), Scanner: scanner, Manager: manager}
 }
 
 func (m Model) Init() tea.Cmd { return m.refresh() }
 
 func (m Model) refresh() tea.Cmd {
 	return func() tea.Msg {
-		ports, err := m.Scanner.List(context.Background())
+		ctx := m.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		ports, err := m.Scanner.List(ctx)
 		if err != nil {
 			return portsFailedMsg{err: err}
 		}
@@ -52,7 +57,7 @@ func (m Model) refresh() tea.Cmd {
 			if m.Manager == nil || ports[i].PID <= 0 {
 				continue
 			}
-			info, infoErr := m.Manager.Info(context.Background(), ports[i].PID)
+			info, infoErr := m.Manager.Info(ctx, ports[i].PID)
 			if infoErr != nil {
 				continue
 			}
@@ -159,7 +164,9 @@ func fitText(value string, width int) string {
 }
 
 func Run(ctx context.Context, scanner port.Scanner, manager process.Manager) error {
-	program := tea.NewProgram(New(scanner, manager), tea.WithContext(ctx))
+	model := New(scanner, manager)
+	model.Context = ctx
+	program := tea.NewProgram(model, tea.WithContext(ctx))
 	_, err := program.Run()
 	return err
 }

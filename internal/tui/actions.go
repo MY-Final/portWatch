@@ -71,13 +71,17 @@ func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
 			pid := m.Ports[m.Selected].PID
 			m.ConfirmKill = false
 			return m, func() tea.Msg {
+				ctx := m.Context
+				if ctx == nil {
+					ctx = context.Background()
+				}
 				if m.Manager == nil {
 					return killDoneMsg{err: errors.New("process manager is nil")}
 				}
-				if err := m.Manager.Terminate(context.Background(), pid); err != nil {
+				if err := m.Manager.Terminate(ctx, pid); err != nil {
 					return killDoneMsg{err: err}
 				}
-				exists, err := m.Manager.Exists(context.Background(), pid)
+				exists, err := m.Manager.Exists(ctx, pid)
 				if err != nil {
 					return killDoneMsg{err: fmt.Errorf("verify pid %d termination: %w", pid, err)}
 				}
