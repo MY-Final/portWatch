@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 
 	"github.com/portwatch/portwatch/pkg/model"
@@ -71,7 +72,11 @@ func Parse(args []string) (Command, error) {
 		return Command{Action: ActionPort, Port: port}, nil
 	case 2:
 		if args[0] == "free" {
-			return Command{}, &ParseError{Kind: ParseErrorFree, Argument: args[1], Message: "free is not available yet"}
+			port, err := strconv.Atoi(args[1])
+			if err != nil || port < 1 || port > 65535 {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: args[1], Message: "port must be a number from 1 to 65535"}
+			}
+			return Command{Action: ActionFree, Port: port}, nil
 		}
 	}
 	return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: args[0], Message: "unknown command or arguments"}
@@ -101,21 +106,101 @@ func (e *ParseError) Error() string {
 	return e.Message
 }
 
-// Run parses args and returns a process exit code. Execution of valid actions
-// is intentionally left to later command tasks; this function never exits the
-// process itself, which keeps it straightforward to test and embed.
-func Run(_ context.Context, args []string, _ Dependencies, _ io.Writer, stderr io.Writer) int {
+// Run parses args, executes the selected action, and returns a process exit
+// code. It never exits the process itself, which keeps it straightforward to
+// test and embed.
+func Run(ctx context.Context, args []string, deps Dependencies, stdout io.Writer, stderr io.Writer) int {
+	return run(ctx, args, deps, os.Stdin, stdout, stderr)
+}
+
+func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader, stdout, stderr io.Writer) int {
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	if _, err := Parse(args); err != nil {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	command, err := Parse(args)
+	if err != nil {
 		var parseErr *ParseError
 		if errors.As(err, &parseErr) {
+			if parseErr.Kind == ParseErrorHelp {
+				_, _ = fmt.Fprintln(stdout, "PortWatch - Windows TCP port diagnostics")
+				_, _ = fmt.Fprintln(stdout, "Usage: portwatch [port] | portwatch free <port>")
+				return ExitSuccess
+			}
 			_, _ = fmt.Fprintf(stderr, "portwatch: %s\nusage: portwatch [port]\n", parseErr)
 		} else {
 			_, _ = fmt.Fprintf(stderr, "portwatch: %s\n", err)
 		}
-		return 2
+		return ExitCode(err)
 	}
-	return 0
+	if deps.Scanner == nil || deps.Manager == nil {
+		err := errors.New("portwatch dependencies are not configured")
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+
+	switch command.Action {
+	case ActionList:
+		return runList(ctx, deps, stdout, stderr)
+	case ActionPort:
+		return runPort(ctx, deps, command.Port, stdout, stderr)
+	case ActionFree:
+		err := Free(ctx, deps.Scanner, deps.Manager, command.Port, stdin, stdout)
+		if err != nil {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
+	default:
+		err := fmt.Errorf("unsupported action %d", command.Action)
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+}
+
+func runList(ctx context.Context, deps Dependencies, stdout, stderr io.Writer) int {
+	ports, err := deps.Scanner.List(ctx)
+	if err != nil {
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+	for i := range ports {
+		info, infoErr := deps.Manager.Info(ctx, ports[i].PID)
+		if infoErr != nil {
+			PrintError(stderr, infoErr)
+			continue
+		}
+		ports[i].ProcessName = info.Name
+	}
+	if err := RenderPorts(stdout, ports); err != nil {
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+	return ExitSuccess
+}
+
+func runPort(ctx context.Context, deps Dependencies, portNumber int, stdout, stderr io.Writer) int {
+	ports, err := deps.Scanner.Port(ctx, portNumber)
+	if err != nil {
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+	if len(ports) == 0 {
+		_, _ = fmt.Fprintf(stdout, "Port %d is available.\n", portNumber)
+		return ExitSuccess
+	}
+	for _, record := range ports {
+		info, infoErr := deps.Manager.Info(ctx, record.PID)
+		if infoErr != nil {
+			_ = RenderPorts(stdout, []model.PortInfo{record})
+			PrintError(stderr, infoErr)
+			return ExitCode(infoErr)
+		}
+		if renderErr := RenderProcess(stdout, info, record); renderErr != nil {
+			PrintError(stderr, renderErr)
+			return ExitCode(renderErr)
+		}
+	}
+	return ExitSuccess
 }

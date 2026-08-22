@@ -159,7 +159,9 @@ const metadataScript = `& {
 }`
 
 func queryMetadata(ctx context.Context, pid int) (processMetadata, error) {
-	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", metadataScript, "-Args", strconv.Itoa(pid))
+	// Arguments placed after the command script are bound to its param block.
+	// The powershell.exe -Args switch does not bind parameters for this form.
+	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", metadataScript, strconv.Itoa(pid))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() != nil {

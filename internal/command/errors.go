@@ -31,6 +31,9 @@ func ExitCode(err error) int {
 	if errors.Is(err, context.Canceled) {
 		return ExitCancelled
 	}
+	if errors.Is(err, ErrUserCancelled) {
+		return ExitCancelled
+	}
 	if isArgumentError(err) {
 		return ExitArguments
 	}
@@ -68,6 +71,8 @@ func errorMessage(err error) string {
 	}
 	switch {
 	case errors.Is(err, context.Canceled):
+		return "operation cancelled"
+	case errors.Is(err, ErrUserCancelled):
 		return "operation cancelled"
 	case errors.Is(err, process.ErrAccessDenied), errors.Is(err, os.ErrPermission), os.IsPermission(err):
 		return "permission denied; 请以管理员身份运行"

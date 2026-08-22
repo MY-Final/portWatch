@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/portwatch/portwatch/pkg/model"
 )
 
 func TestParseRootArguments(t *testing.T) {
@@ -39,7 +41,7 @@ func TestParseRootErrors(t *testing.T) {
 		{name: "non numeric", args: []string{"abc"}, kind: ParseErrorInvalidPort},
 		{name: "out of range", args: []string{"65536"}, kind: ParseErrorInvalidPort},
 		{name: "unknown command", args: []string{"find", "8080"}, kind: ParseErrorUnknownCommand},
-		{name: "free command", args: []string{"free", "8080"}, kind: ParseErrorFree},
+		{name: "free without port", args: []string{"free"}, kind: ParseErrorFree},
 		{name: "help", args: []string{"--help"}, kind: ParseErrorHelp},
 	}
 	for _, tt := range tests {
@@ -67,7 +69,36 @@ func TestRunReturnsExitCodeWithoutExit(t *testing.T) {
 	if !strings.Contains(stderr.String(), "usage: portwatch [port]") {
 		t.Fatalf("stderr = %q, want usage", stderr.String())
 	}
-	if code := Run(context.Background(), nil, Dependencies{}, nil, &stderr); code != 0 {
+	deps := Dependencies{
+		Scanner: fakeRootScanner{},
+		Manager: fakeRootManager{},
+	}
+	if code := Run(context.Background(), nil, deps, nil, &stderr); code != 0 {
 		t.Fatalf("Run() empty args code = %d, want 0", code)
 	}
 }
+
+func TestParseFreeCommand(t *testing.T) {
+	got, err := Parse([]string{"free", "8080"})
+	if err != nil {
+		t.Fatalf("Parse(free) error = %v", err)
+	}
+	if got.Action != ActionFree || got.Port != 8080 {
+		t.Fatalf("Parse(free) = %#v, want ActionFree port 8080", got)
+	}
+}
+
+type fakeRootScanner struct{}
+
+func (fakeRootScanner) List(context.Context) ([]model.PortInfo, error) { return nil, nil }
+func (fakeRootScanner) Port(context.Context, int) ([]model.PortInfo, error) {
+	return nil, nil
+}
+
+type fakeRootManager struct{}
+
+func (fakeRootManager) Info(context.Context, int) (model.ProcessInfo, error) {
+	return model.ProcessInfo{}, nil
+}
+func (fakeRootManager) Exists(context.Context, int) (bool, error) { return false, nil }
+func (fakeRootManager) Terminate(context.Context, int) error      { return nil }

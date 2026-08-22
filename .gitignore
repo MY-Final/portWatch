@@ -1,5 +1,6 @@
 # Build artifacts
 /portwatch
+/portwatch.exe
 /bin/
 
 # IDE and editor files
