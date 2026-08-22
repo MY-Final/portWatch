@@ -24,9 +24,12 @@ type Event struct {
 }
 
 type Engine struct {
-	Scanner  port.Scanner
-	Interval time.Duration
-	Now      func() time.Time
+	Scanner     port.Scanner
+	Interval    time.Duration
+	Now         func() time.Time
+	OnScanError func(error) error
+	Enrich      func(model.PortInfo) model.PortInfo
+	Filter      func(model.PortInfo) bool
 }
 
 func (e Engine) Run(ctx context.Context, emit func(Event) error) error {
@@ -45,10 +48,25 @@ func (e Engine) Run(ctx context.Context, emit func(Event) error) error {
 	for {
 		currentRecords, err := e.Scanner.List(ctx)
 		if err != nil {
-			return err
+			if e.OnScanError == nil {
+				return err
+			}
+			if callbackErr := e.OnScanError(err); callbackErr != nil {
+				return callbackErr
+			}
+			if err := wait(ctx, e.Interval); err != nil {
+				return err
+			}
+			continue
 		}
 		current := make(map[portKey]model.PortInfo, len(currentRecords))
 		for _, record := range currentRecords {
+			if e.Filter != nil && !e.Filter(record) {
+				continue
+			}
+			if e.Enrich != nil {
+				record = e.Enrich(record)
+			}
 			current[keyOf(record)] = record
 		}
 		events := diff(previous, current, first, now())
@@ -59,13 +77,20 @@ func (e Engine) Run(ctx context.Context, emit func(Event) error) error {
 		}
 		previous = current
 		first = false
-		timer := time.NewTimer(e.Interval)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
+		if err := wait(ctx, e.Interval); err != nil {
+			return err
 		}
+	}
+}
+
+func wait(ctx context.Context, interval time.Duration) error {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,5 +29,24 @@ func TestModelDetailsAndKillConfirmation(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	if !updated.(Model).ConfirmKill {
 		t.Fatal("k did not request confirmation")
+	}
+}
+
+func TestModelFilterInput(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{
+		{Port: 3000, ProcessName: "node.exe"},
+		{Port: 8080, ProcessName: "java.exe"},
+	}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	view := updated.(Model).View()
+	if !strings.Contains(view, "node.exe") || strings.Contains(view, "java.exe") {
+		t.Fatalf("filtered view = %q", view)
+	}
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if model := updated.(Model); model.Filtering || model.Filter != "" {
+		t.Fatalf("escape did not clear filter: %+v", model)
 	}
 }

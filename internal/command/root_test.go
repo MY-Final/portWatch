@@ -99,6 +99,36 @@ func TestParseFreeCommand(t *testing.T) {
 	}
 }
 
+func TestParseTUICommand(t *testing.T) {
+	got, err := Parse([]string{"tui"})
+	if err != nil {
+		t.Fatalf("Parse(tui) error = %v", err)
+	}
+	if got.Action != ActionTUI {
+		t.Fatalf("Parse(tui) action = %v, want ActionTUI", got.Action)
+	}
+}
+
+func TestParseFindJoinsQueryWords(t *testing.T) {
+	got, err := Parse([]string{"find", "spring", "boot"})
+	if err != nil {
+		t.Fatalf("Parse(find) error = %v", err)
+	}
+	if got.Action != ActionFind || got.Query != "spring boot" {
+		t.Fatalf("Parse(find) = %#v", got)
+	}
+}
+
+func TestParseWatchPort(t *testing.T) {
+	got, err := Parse([]string{"watch", "8080"})
+	if err != nil {
+		t.Fatalf("Parse(watch) error = %v", err)
+	}
+	if got.Action != ActionWatch || got.Port != 8080 {
+		t.Fatalf("Parse(watch) = %#v", got)
+	}
+}
+
 type fakeRootScanner struct{}
 
 func (fakeRootScanner) List(context.Context) ([]model.PortInfo, error) { return nil, nil }

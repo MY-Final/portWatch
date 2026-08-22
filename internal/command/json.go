@@ -6,10 +6,15 @@ import (
 	"io"
 	"sort"
 
+	"github.com/portwatch/portwatch/internal/service"
 	"github.com/portwatch/portwatch/pkg/model"
 )
 
 func RenderJSON(w io.Writer, ports []model.PortInfo, infos map[int]model.ProcessInfo) error {
+	return RenderJSONWithServices(w, ports, infos, nil)
+}
+
+func RenderJSONWithServices(w io.Writer, ports []model.PortInfo, infos map[int]model.ProcessInfo, detector service.Detector) error {
 	if w == nil {
 		return errors.New("output writer is nil")
 	}
@@ -22,7 +27,12 @@ func RenderJSON(w io.Writer, ports []model.PortInfo, infos map[int]model.Process
 	})
 	results := make([]model.PortResult, 0, len(sorted))
 	for _, port := range sorted {
-		results = append(results, model.NewPortResult(port, infos[port.PID]))
+		result := model.NewPortResult(port, infos[port.PID])
+		if detector != nil {
+			info := detector.Detect(port, infos[port.PID])
+			result.Service = &model.ServiceResult{Name: info.Name, Type: info.Type, Confidence: info.Confidence}
+		}
+		results = append(results, result)
 	}
 	return json.NewEncoder(w).Encode(model.PortsResponse{SchemaVersion: model.JSONSchemaVersion, Ports: results})
 }

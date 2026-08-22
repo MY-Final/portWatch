@@ -24,7 +24,7 @@ func RenderPortsWithServices(w io.Writer, ports []model.PortInfo, infos map[int]
 		return sorted[i].PID < sorted[j].PID
 	})
 	tw := tabwriter.NewWriter(w, 0, 4, 1, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "PORT\tPROTOCOL\tPID\tPROCESS\tSERVICE"); err != nil {
+	if _, err := fmt.Fprintln(tw, "PORT\tPROTOCOL\tSTATE\tPID\tPROCESS NAME\tCOMMAND\tEXECUTABLE PATH\tSERVICE"); err != nil {
 		return err
 	}
 	for _, record := range sorted {
@@ -33,7 +33,7 @@ func RenderPortsWithServices(w io.Writer, ports []model.PortInfo, infos map[int]
 		if detector != nil {
 			serviceInfo = detector.Detect(record, info)
 		}
-		if _, err := fmt.Fprintf(tw, "%d\t%s\t%d\t%s\t%s\n", record.Port, record.Protocol, record.PID, display(info.Name), serviceInfo.Name); err != nil {
+		if _, err := fmt.Fprintf(tw, "%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", record.Port, display(record.Protocol), display(record.State), record.PID, display(info.Name), display(info.Command), display(info.Executable), display(serviceInfo.Name)); err != nil {
 			return err
 		}
 	}

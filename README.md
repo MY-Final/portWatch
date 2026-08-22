@@ -11,7 +11,10 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 - 按 PID 终止进程：`portwatch kill 1234`
 - 按进程名搜索：`portwatch find node`
 - JSON 输出：`portwatch --json 8080`
+- JSON 搜索：`portwatch --json find node`
 - 实时监听端口变化：`portwatch --interval 2s watch`
+- 只监听一个端口：`portwatch watch 8080`
+- 交互式终端界面：`portwatch tui`
 - `--help`、`--version` 和 `--protocol tcp`
 
 `free` 会先显示进程详情并要求输入 `y` 或 `yes`，终止后重新扫描端口；直接回车或输入其他内容都会取消操作。
@@ -60,8 +63,17 @@ portwatch --json 8080
 # 每 2 秒报告新增或移除的监听端口，按 Ctrl+C 退出
 portwatch --interval 2s watch
 
+# 只监控 8080 端口
+portwatch watch 8080
+
 # 搜索名称包含 node 的进程
 portwatch find node
+
+# 以 JSON 搜索名称包含 node 的进程
+portwatch --json find node
+
+# 启动交互式终端界面
+portwatch tui
 
 # 终止指定 PID（会要求确认）
 portwatch kill 1234
@@ -79,7 +91,7 @@ Windows 使用 IP Helper API 扫描 IPv4/IPv6 TCP 监听端口，并通过 Windo
 进程 API 和 WMI 获取进程详情。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
 这两个平台的实现已包含在代码中，但建议在目标系统上单独验证权限和命令可用性。
 
-当前 CLI 只扫描 TCP 监听端口，`--protocol` 暂时只接受 `tcp`。TUI、开发服务识别和更丰富的 CLI 交互仍属于后续工作，尚未由根命令自动启动。
+当前 CLI 只扫描 TCP 监听端口，`--protocol` 暂时只接受 `tcp`。TUI 可以通过 `portwatch tui` 显式启动；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
 
 ## 开发
 

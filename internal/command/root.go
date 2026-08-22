@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/portwatch/portwatch/internal/service"
+	"github.com/portwatch/portwatch/internal/tui"
 	"github.com/portwatch/portwatch/pkg/model"
 )
 
@@ -44,6 +46,7 @@ const (
 	ActionKill
 	ActionFind
 	ActionWatch
+	ActionTUI
 	ActionHelp
 	ActionVersion
 )
@@ -58,10 +61,10 @@ type Command struct {
 	Flags  flagOptions
 }
 
-// Parse parses the MVP root arguments without executing any platform work.
+// Parse parses root arguments without executing any platform work.
 // An empty argument list means list all listening ports. A single decimal
-// argument means inspect that port. Other commands are reserved for later
-// wiring and return a structured ParseError.
+// argument means inspect that port. Known subcommands return their own action;
+// malformed or unknown arguments return a structured ParseError.
 func Parse(args []string) (Command, error) {
 	options, positional, flagErr := parseFlags(args)
 	if flagErr != nil {
@@ -76,6 +79,12 @@ func Parse(args []string) (Command, error) {
 	if len(positional) == 0 {
 		return Command{Action: ActionList, Flags: options}, nil
 	}
+	if len(positional) >= 2 && positional[0] == "find" {
+		query := strings.TrimSpace(strings.Join(positional[1:], " "))
+		if query != "" {
+			return Command{Action: ActionFind, Query: query, Flags: options}, nil
+		}
+	}
 	switch len(positional) {
 	case 0:
 	case 1:
@@ -85,8 +94,10 @@ func Parse(args []string) (Command, error) {
 			return Command{Action: ActionHelp, Flags: options}, nil
 		case "watch":
 			return Command{Action: ActionWatch, Flags: options}, nil
+		case "tui":
+			return Command{Action: ActionTUI, Flags: options}, nil
 		case "free":
-			return Command{}, &ParseError{Kind: ParseErrorFree, Argument: arg, Message: "free requires a port and is not available yet"}
+			return Command{}, &ParseError{Kind: ParseErrorFree, Argument: arg, Message: "free requires a port"}
 		}
 		port, err := strconv.Atoi(arg)
 		if err != nil || port < 1 || port > 65535 {
@@ -94,6 +105,13 @@ func Parse(args []string) (Command, error) {
 		}
 		return Command{Action: ActionPort, Port: port, Flags: options}, nil
 	case 2:
+		if positional[0] == "watch" {
+			port, err := strconv.Atoi(positional[1])
+			if err != nil || port < 1 || port > 65535 {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: positional[1], Message: "port must be a number from 1 to 65535"}
+			}
+			return Command{Action: ActionWatch, Port: port, Flags: options}, nil
+		}
 		if positional[0] == "free" {
 			port, err := strconv.Atoi(positional[1])
 			if err != nil || port < 1 || port > 65535 {
@@ -107,13 +125,6 @@ func Parse(args []string) (Command, error) {
 				return Command{}, &ParseError{Kind: ParseErrorInvalidPID, Argument: positional[1], Message: "pid must be a positive number"}
 			}
 			return Command{Action: ActionKill, PID: pid, Flags: options}, nil
-		}
-		if positional[0] == "find" && strings.TrimSpace(positional[1]) != "" {
-			return Command{Action: ActionFind, Query: positional[1], Flags: options}, nil
-		}
-	case 3:
-		if positional[0] == "find" && strings.TrimSpace(positional[1]) != "" {
-			return Command{Action: ActionFind, Query: strings.Join(positional[1:], " "), Flags: options}, nil
 		}
 	}
 	return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: positional[0], Message: "unknown command or arguments"}
@@ -174,6 +185,9 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		_, _ = fmt.Fprintln(stdout, "       portwatch free <port>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch kill <pid>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch find <name>")
+		_, _ = fmt.Fprintln(stdout, "       portwatch watch")
+		_, _ = fmt.Fprintln(stdout, "       portwatch tui")
+		_, _ = fmt.Fprintln(stdout, "Flags: --json --interval <duration> --protocol tcp")
 		return ExitSuccess
 	}
 	if command.Action == ActionVersion {
@@ -213,13 +227,24 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		}
 		return ExitCode(err)
 	case ActionFind:
-		err := Find(ctx, deps.Scanner, deps.Manager, command.Query, stdout)
+		var err error
+		if command.Flags.JSON {
+			err = FindJSON(ctx, deps.Scanner, deps.Manager, command.Query, stdout)
+		} else {
+			err = Find(ctx, deps.Scanner, deps.Manager, command.Query, stdout)
+		}
 		if err != nil {
 			PrintError(stderr, err)
 		}
 		return ExitCode(err)
 	case ActionWatch:
-		err := Watch(ctx, deps.Scanner, command.Flags.Interval, stdout)
+		err := Watch(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, stdout, stderr)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
+	case ActionTUI:
+		err := tui.Run(ctx, deps.Scanner, deps.Manager)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			PrintError(stderr, err)
 		}
@@ -249,9 +274,9 @@ func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr
 	}
 	var renderErr error
 	if asJSON {
-		renderErr = RenderJSON(stdout, ports, infos)
+		renderErr = RenderJSONWithServices(stdout, ports, infos, service.Rules{})
 	} else {
-		renderErr = RenderPorts(stdout, ports)
+		renderErr = RenderPortsWithServices(stdout, ports, infos, service.Rules{})
 	}
 	if renderErr != nil {
 		PrintError(stderr, renderErr)
@@ -268,7 +293,7 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 	}
 	if len(ports) == 0 {
 		if asJSON {
-			if renderErr := RenderJSON(stdout, nil, nil); renderErr != nil {
+			if renderErr := RenderJSONWithServices(stdout, nil, nil, service.Rules{}); renderErr != nil {
 				PrintError(stderr, renderErr)
 				return ExitCode(renderErr)
 			}
@@ -288,13 +313,13 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 		infos[record.PID] = info
 	}
 	if asJSON {
-		if renderErr := RenderJSON(stdout, ports, infos); renderErr != nil {
+		if renderErr := RenderJSONWithServices(stdout, ports, infos, service.Rules{}); renderErr != nil {
 			PrintError(stderr, renderErr)
 			return ExitCode(renderErr)
 		}
 	} else {
 		for _, record := range ports {
-			if renderErr := RenderProcess(stdout, infos[record.PID], record); renderErr != nil {
+			if renderErr := RenderProcessWithService(stdout, infos[record.PID], record, service.Rules{}); renderErr != nil {
 				PrintError(stderr, renderErr)
 				return ExitCode(renderErr)
 			}

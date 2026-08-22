@@ -14,6 +14,19 @@ type sequenceScanner struct {
 	index     int
 }
 
+type errorThenScanner struct {
+	called bool
+}
+
+func (s *errorThenScanner) List(context.Context) ([]model.PortInfo, error) {
+	if !s.called {
+		s.called = true
+		return nil, errors.New("temporary scan failure")
+	}
+	return []model.PortInfo{{Port: 8080, PID: 1}}, nil
+}
+func (s *errorThenScanner) Port(context.Context, int) ([]model.PortInfo, error) { return nil, nil }
+
 func (s *sequenceScanner) List(context.Context) ([]model.PortInfo, error) {
 	if s.index >= len(s.sequences) {
 		return s.sequences[len(s.sequences)-1], nil
@@ -53,5 +66,27 @@ func TestDiffInitialEventsAreSorted(t *testing.T) {
 	}, true, time.Unix(0, 0))
 	if len(events) != 2 || events[0].Port.Port != 3000 || events[1].Port.Port != 9000 {
 		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestEngineRetriesAfterScanError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	scanner := &errorThenScanner{}
+	var scanErrors int
+	var events int
+	err := (Engine{
+		Scanner: scanner, Interval: time.Millisecond,
+		OnScanError: func(error) error { scanErrors++; return nil },
+	}).Run(ctx, func(Event) error {
+		events++
+		cancel()
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+	if scanErrors != 1 || events != 1 {
+		t.Fatalf("scanErrors=%d events=%d", scanErrors, events)
 	}
 }
