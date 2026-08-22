@@ -38,6 +38,16 @@ func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) handleListKey(key tea.KeyMsg) (Model, tea.Cmd) {
+	// Use the typed key in addition to String() because Windows console input
+	// adapters can normalize arrow sequences differently across terminals.
+	if key.Type == tea.KeyUp {
+		m.moveSelection(-1)
+		return m, nil
+	}
+	if key.Type == tea.KeyDown {
+		m.moveSelection(1)
+		return m, nil
+	}
 	switch key.String() {
 	case "r":
 		m.Status = "Refreshing..."
@@ -45,10 +55,6 @@ func (m Model) handleListKey(key tea.KeyMsg) (Model, tea.Cmd) {
 	case "/":
 		m.Filtering = true
 		return m, nil
-	case "up":
-		m.moveSelection(-1)
-	case "down":
-		m.moveSelection(1)
 	case "enter":
 		if record, ok := m.selectedRecord(); ok {
 			m.DetailRecord = record

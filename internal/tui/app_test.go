@@ -69,6 +69,29 @@ func TestModelFilterMatchesPortAndKeepsSelectionVisible(t *testing.T) {
 	}
 }
 
+func TestArrowKeysMoveSelectionByKeyType(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{
+		{Port: 3000, PID: 11, ProcessName: "node.exe"},
+		{Port: 8080, PID: 22, ProcessName: "java.exe"},
+		{Port: 9000, PID: 33, ProcessName: "go.exe"},
+	}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.Selected != 1 {
+		t.Fatalf("down selected index = %d, want 1", m.Selected)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.Selected != 2 {
+		t.Fatalf("second down selected index = %d, want 2", m.Selected)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = updated.(Model)
+	if m.Selected != 1 {
+		t.Fatalf("up selected index = %d, want 1", m.Selected)
+	}
+}
+
 type tuiTestManager struct {
 	exists bool
 }
