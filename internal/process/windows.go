@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/windows"
 
@@ -57,18 +58,84 @@ func (WindowsManager) Exists(_ context.Context, pid int) (bool, error) {
 		return false, err
 	}
 
-	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION, false, uint32(pid))
 	if err != nil {
 		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) || errors.Is(err, windows.ERROR_INVALID_HANDLE) {
 			return false, nil
 		}
 		return false, mapProcessError("open process", pid, err)
 	}
+	var exitCode uint32
+	exitErr := windows.GetExitCodeProcess(handle, &exitCode)
 	if err := windows.CloseHandle(handle); err != nil {
 		return false, fmt.Errorf("close process handle for pid %d: %w", pid, err)
 	}
-	return true, nil
+	if exitErr != nil {
+		return false, fmt.Errorf("check process state for pid %d: %w", pid, exitErr)
+	}
+	return exitCode == 259, nil
 }
+
+// Terminate requests process termination and waits until the process can no
+// longer be opened. Critical system processes are rejected before any API
+// call so a caller cannot accidentally target the system process.
+func (m WindowsManager) Terminate(ctx context.Context, pid int) error {
+	if err := ValidatePID(pid); err != nil {
+		return err
+	}
+	if pid == 4 {
+		return fmt.Errorf("refusing to terminate critical pid %d: %w", pid, ErrAccessDenied)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	handle, err := windows.OpenProcess(windows.PROCESS_TERMINATE|windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return mapProcessError("open process for termination", pid, err)
+	}
+	if err := windows.TerminateProcess(handle, 1); err != nil {
+		_ = windows.CloseHandle(handle)
+		return mapProcessError("terminate process", pid, err)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if err := ctx.Err(); err != nil {
+			_ = windows.CloseHandle(handle)
+			return err
+		}
+		event, waitErr := windows.WaitForSingleObject(handle, pollIntervalMilliseconds)
+		if waitErr != nil {
+			_ = windows.CloseHandle(handle)
+			return fmt.Errorf("wait for pid %d to exit: %w", pid, waitErr)
+		}
+		switch event {
+		case windows.WAIT_OBJECT_0:
+			if err := windows.CloseHandle(handle); err != nil {
+				return fmt.Errorf("close process handle for pid %d: %w", pid, err)
+			}
+			exists, err := m.Exists(ctx, pid)
+			if err != nil {
+				return fmt.Errorf("verify termination for pid %d: %w", pid, err)
+			}
+			if exists {
+				return fmt.Errorf("process pid %d still exists after termination", pid)
+			}
+			return nil
+		case uint32(windows.WAIT_TIMEOUT):
+			if time.Now().After(deadline) {
+				_ = windows.CloseHandle(handle)
+				return fmt.Errorf("timed out waiting for pid %d to exit", pid)
+			}
+		default:
+			_ = windows.CloseHandle(handle)
+			return fmt.Errorf("wait for pid %d to exit: unexpected wait result %#x", pid, event)
+		}
+	}
+}
+
+const pollIntervalMilliseconds = 50
 
 type processMetadata struct {
 	Name        string `json:"Name"`
