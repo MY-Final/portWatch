@@ -27,7 +27,7 @@
 | 010 | **done** | `010-output-table.md` | `internal/command/output.go` | 002, 003 | Luna-010 | `fa50537` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 011 | **done** | `011-error-handling.md` | `internal/command/errors.go` | 003, 004, 006 | Luna-011 | `2ee32d6` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 012 | **done** | `012-unit-tests.md` | `*_test.go` beside owned packages | 002-011 | Main Agent | `40a33c3` | `go test ./...`; `go build ./...`; `git diff --check` |
-| 013 | **done** | `013-mvp-integration.md` | final wiring in `cmd/portwatch/main.go`, README | 009-012 | Main Agent | pending | `go test ./...`; `go vet ./...`; `go build -o portwatch.exe ./cmd/portwatch`; Windows runtime checks |
+| 013 | **done** | `013-mvp-integration.md` | final wiring in `cmd/portwatch/main.go`, README | 009-012 | Main Agent | `eafa2fe` | `go test ./...`; `go vet ./...`; `go build -o portwatch.exe ./cmd/portwatch`; Windows runtime checks |
 
 ## Future phases
 
