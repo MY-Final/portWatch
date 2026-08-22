@@ -83,6 +83,8 @@ func Parse(args []string) (Command, error) {
 		switch arg {
 		case "help":
 			return Command{Action: ActionHelp, Flags: options}, nil
+		case "watch":
+			return Command{Action: ActionWatch, Flags: options}, nil
 		case "free":
 			return Command{}, &ParseError{Kind: ParseErrorFree, Argument: arg, Message: "free requires a port and is not available yet"}
 		}
@@ -213,6 +215,12 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	case ActionFind:
 		err := Find(ctx, deps.Scanner, deps.Manager, command.Query, stdout)
 		if err != nil {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
+	case ActionWatch:
+		err := Watch(ctx, deps.Scanner, command.Flags.Interval, stdout)
+		if err != nil && !errors.Is(err, context.Canceled) {
 			PrintError(stderr, err)
 		}
 		return ExitCode(err)

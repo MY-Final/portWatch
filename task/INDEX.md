@@ -43,3 +43,16 @@ Each future card is intentionally isolated in its own files and must not be sche
 | 7 | Linux `/proc`/`ss` implementation |
 | 8 | macOS `libproc`/`netstat` implementation |
 | 9 | CI, release binaries, packaging and cross-platform verification |
+
+## Future Task Status
+
+| Task | 状态 | Commit |
+| --- | --- | --- |
+| 201-202 | done | current Phase 2 commit |
+| 301-302 | done | current Phase 3 commit |
+| 401-402 | done | current Phase 4 commit |
+| 501-502 | pending | - |
+| 601-602 | pending | - |
+| 701-702 | pending | - |
+| 801-802 | pending | - |
+| 901-902 | pending | - |
