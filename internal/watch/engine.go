@@ -64,11 +64,11 @@ func (e Engine) Run(ctx context.Context, emit func(Event) error) error {
 		}
 		current := make(map[portKey]model.PortInfo, len(currentRecords))
 		for _, record := range currentRecords {
-			if e.Filter != nil && !e.Filter(record) {
-				continue
-			}
 			if e.Enrich != nil {
 				record = e.Enrich(record)
+			}
+			if e.Filter != nil && !e.Filter(record) {
+				continue
 			}
 			current[keyOf(record)] = record
 		}

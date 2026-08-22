@@ -6,14 +6,25 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/portwatch/portwatch/internal/process"
+)
+
+var (
+	// ErrKillFailed marks termination or post-termination verification failures.
+	ErrKillFailed = errors.New("process termination failed")
+	// ErrProtectedProcess marks a PID that PortWatch refuses to terminate.
+	ErrProtectedProcess = errors.New("protected process")
 )
 
 // Kill confirms and terminates one PID, then verifies that it no longer exists.
 func Kill(ctx context.Context, manager process.Manager, pid int, in io.Reader, out io.Writer) error {
 	if manager == nil || in == nil || out == nil {
 		return errors.New("kill dependencies are nil")
+	}
+	if err := validateKillTarget(pid); err != nil {
+		return err
 	}
 	info, err := manager.Info(ctx, pid)
 	if err != nil {
@@ -30,15 +41,22 @@ func Kill(ctx context.Context, manager process.Manager, pid int, in io.Reader, o
 		return ErrUserCancelled
 	}
 	if err := manager.Terminate(ctx, pid); err != nil {
-		return fmt.Errorf("terminate pid %d: %w", pid, err)
+		return fmt.Errorf("%w: terminate pid %d: %w", ErrKillFailed, pid, err)
 	}
 	exists, err := manager.Exists(ctx, pid)
 	if err != nil {
-		return fmt.Errorf("verify pid %d termination: %w", pid, err)
+		return fmt.Errorf("%w: verify pid %d termination: %w", ErrKillFailed, pid, err)
 	}
 	if exists {
-		return fmt.Errorf("%w: pid %d", ErrPortStillOccupied, pid)
+		return fmt.Errorf("%w: %w: pid %d", ErrKillFailed, ErrPortStillOccupied, pid)
 	}
 	_, _ = fmt.Fprintln(out, "Process terminated.")
+	return nil
+}
+
+func validateKillTarget(pid int) error {
+	if pid == 4 || pid == os.Getpid() {
+		return fmt.Errorf("%w: refusing to terminate pid %d", ErrProtectedProcess, pid)
+	}
 	return nil
 }

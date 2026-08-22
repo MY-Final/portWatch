@@ -3,6 +3,9 @@ package model
 // JSONSchemaVersion is bumped when the machine-readable response shape changes.
 const JSONSchemaVersion = "2"
 
+// ProcessSchemaVersion is the independent contract version for info output.
+const ProcessSchemaVersion = "1"
+
 // PortResult is the stable, platform-neutral JSON representation of a port
 // and its optional owning process.
 type PortResult struct {
@@ -45,6 +48,24 @@ type FindResponse struct {
 	SchemaVersion string          `json:"schema_version"`
 	Query         string          `json:"query"`
 	Processes     []ProcessResult `json:"processes"`
+}
+
+// ProcessResponse is returned by the read-only info command.
+type ProcessResponse struct {
+	SchemaVersion string            `json:"schema_version"`
+	Process       InfoProcessResult `json:"process"`
+}
+
+// InfoProcessResult is the process detail shape used by the info command.
+// It intentionally uses name instead of the find response's process_name.
+type InfoProcessResult struct {
+	PID        int    `json:"pid"`
+	Name       string `json:"name"`
+	Executable string `json:"executable"`
+	Command    string `json:"command"`
+	WorkingDir string `json:"working_dir"`
+	User       string `json:"user"`
+	Ports      []int  `json:"ports"`
 }
 
 // WatchEventResponse is one machine-readable port change event.

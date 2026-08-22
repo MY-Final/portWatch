@@ -29,6 +29,8 @@ func TestExitCode(t *testing.T) {
 		{name: "process not found", err: fmtWrap(process.ErrProcessNotFound), want: ExitSystem},
 		{name: "not supported", err: fmtWrap(process.ErrNotSupported), want: ExitSystem},
 		{name: "cancelled", err: fmtWrap(context.Canceled), want: ExitCancelled},
+		{name: "kill failure", err: fmtWrap(ErrKillFailed), want: ExitKill},
+		{name: "protected process", err: fmtWrap(ErrProtectedProcess), want: ExitKill},
 		{name: "unknown", err: errors.New("scan failed"), want: ExitSystem},
 	}
 	for _, tt := range tests {

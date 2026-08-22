@@ -3,7 +3,7 @@
 PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以查询 TCP
 监听端口对应的 PID、进程名、命令行和可执行文件路径，也可以在确认后终止占用端口的进程。
 
-当前版本：`v0.2.0`
+当前版本：`v0.3.0`
 
 ## 当前支持
 
@@ -19,6 +19,9 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 - 实时监听端口变化：`portwatch --interval 2s watch`
 - JSON 监听事件：`portwatch --json watch`
 - 只监听一个端口：`portwatch watch 8080`
+- 按进程、PID 或状态筛选：`portwatch --process node`、`portwatch --pid 1234`、`portwatch --state LISTENING`
+- 查看 PID 详情及其端口：`portwatch info 1234`
+- JSON 查看 PID 详情：`portwatch --json info 1234`
 - 交互式终端界面：`portwatch tui`
 - `--help`、`--version` 和 `--protocol tcp|udp|all`
 
@@ -92,6 +95,15 @@ portwatch find node
 # 以 JSON 搜索名称包含 node 的进程
 portwatch --json find node
 
+# 只查看 node 进程监听的端口
+portwatch --process node
+
+# 查看 PID 详情和它占用的端口
+portwatch info 1234
+
+# 以 JSON 输出 PID 详情
+portwatch --json info 1234
+
 # 启动交互式终端界面
 portwatch tui
 
@@ -114,6 +126,21 @@ JSON 响应顶层包含 `schema_version`。当前版本为 `"2"`，端口结果�
 
 `--json free` 和 `--json find <name>` 也使用同一个 schema 版本字段。
 `--json watch` 使用 JSON Lines：每行是一个独立事件对象，包含 `event`、`observed_at`、端口、协议、PID 和进程名。
+
+`--json info <pid>` 使用独立的进程详情 schema（当前为 `"1"`），返回
+`process` 对象及其 `ports` 数组；它不会改变端口响应的 schema `"2"`。
+
+### 退出码
+
+脚本可以依赖以下稳定退出码：
+
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 查询成功、空结果、用户取消或 Ctrl+C |
+| `2` | 参数、端口、PID 或筛选条件无效 |
+| `3` | 扫描或进程信息读取失败 |
+| `4` | 权限不足 |
+| `5` | Kill 失败、关键 PID 拒绝或 Kill 后验证失败 |
 
 所有全局选项应放在位置参数或子命令之前，例如使用
 `portwatch --json 8080`，不要写成 `portwatch 8080 --json`。
@@ -147,3 +174,4 @@ $env:GOOS = "darwin";  $env:GOARCH = "arm64"; go build ./cmd/portwatch
 ## 任务规划
 
 开发任务和后续阶段见 [`task/README.md`](task/README.md) 与 [`task/INDEX.md`](task/INDEX.md)。
+V4 产品范围、退出码、安全边界和后续任务拆分见 [`prd/v4.md`](prd/v4.md)。

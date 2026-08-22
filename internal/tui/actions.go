@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -83,6 +84,9 @@ func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
 				}
 				if m.Manager == nil {
 					return killDoneMsg{err: errors.New("process manager is nil")}
+				}
+				if pid == 4 || pid == os.Getpid() {
+					return killDoneMsg{err: fmt.Errorf("refusing to terminate protected pid %d", pid)}
 				}
 				if err := m.Manager.Terminate(ctx, pid); err != nil {
 					return killDoneMsg{err: err}

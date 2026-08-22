@@ -51,6 +51,7 @@ const (
 	ActionFind
 	ActionWatch
 	ActionTUI
+	ActionInfo
 	ActionHelp
 	ActionVersion
 )
@@ -82,6 +83,9 @@ func Parse(args []string) (Command, error) {
 	if options.Version {
 		return Command{Action: ActionVersion, Flags: options}, nil
 	}
+	if _, filterErr := options.queryFilter(); filterErr != nil {
+		return Command{}, &ParseError{Kind: ParseErrorInvalidFilter, Argument: filterErr.Error(), Message: filterErr.Error()}
+	}
 	if len(positional) == 0 {
 		if options.PortsSet {
 			ports, setErr := parsePortSet(options.Ports)
@@ -112,6 +116,8 @@ func Parse(args []string) (Command, error) {
 			return Command{Action: ActionWatch, Flags: options}, nil
 		case "tui":
 			return Command{Action: ActionTUI, Flags: options}, nil
+		case "info":
+			return Command{}, &ParseError{Kind: ParseErrorInvalidPID, Argument: arg, Message: "info requires a pid"}
 		case "free":
 			return Command{}, &ParseError{Kind: ParseErrorFree, Argument: arg, Message: "free requires a port"}
 		}
@@ -149,6 +155,13 @@ func Parse(args []string) (Command, error) {
 			}
 			return Command{Action: ActionKill, PID: pid, Flags: options}, nil
 		}
+		if positional[0] == "info" {
+			pid, err := strconv.Atoi(positional[1])
+			if err != nil || pid <= 0 {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPID, Argument: positional[1], Message: "pid must be a positive number"}
+			}
+			return Command{Action: ActionInfo, PID: pid, Flags: options}, nil
+		}
 	}
 	return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: positional[0], Message: "unknown command or arguments"}
 }
@@ -162,6 +175,7 @@ const (
 	ParseErrorHelp
 	ParseErrorFree
 	ParseErrorInvalidPID
+	ParseErrorInvalidFilter
 )
 
 // ParseError is a machine-readable root argument error.
@@ -203,20 +217,32 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		return ExitCode(err)
 	}
 	if command.Action == ActionHelp {
-		_, _ = fmt.Fprintln(stdout, "PortWatch - Windows TCP port diagnostics")
+		_, _ = fmt.Fprintln(stdout, "PortWatch - cross-platform port diagnostics")
 		_, _ = fmt.Fprintln(stdout, "Usage: portwatch [flags] [port]")
 		_, _ = fmt.Fprintln(stdout, "       portwatch free <port>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch kill <pid>")
+		_, _ = fmt.Fprintln(stdout, "       portwatch info <pid>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch find <name>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch <start-end>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch watch")
 		_, _ = fmt.Fprintln(stdout, "       portwatch tui")
-		_, _ = fmt.Fprintln(stdout, "Flags: --json --ports <p1,p2> --interval <duration> --protocol tcp")
+		_, _ = fmt.Fprintln(stdout, "Flags: --json --ports <p1,p2> --pid <p1,p2> --process <name> --state <state> --interval <duration> --protocol tcp")
 		return ExitSuccess
 	}
 	if command.Action == ActionVersion {
 		_, _ = fmt.Fprintln(stdout, Version)
 		return ExitSuccess
+	}
+	queryFilter, filterErr := command.Flags.queryFilter()
+	if filterErr != nil {
+		parseErr := &ParseError{Kind: ParseErrorInvalidFilter, Message: filterErr.Error()}
+		PrintError(stderr, parseErr)
+		return ExitCode(parseErr)
+	}
+	if !queryFilter.Empty() && !filtersAllowed(command.Action) {
+		parseErr := &ParseError{Kind: ParseErrorInvalidFilter, Message: "query filters are only supported for port queries and watch"}
+		PrintError(stderr, parseErr)
+		return ExitCode(parseErr)
 	}
 	if deps.Scanner == nil || deps.Manager == nil {
 		err := errors.New("portwatch dependencies are not configured")
@@ -234,13 +260,13 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 
 	switch command.Action {
 	case ActionList:
-		return runList(ctx, deps, command.Flags.JSON, stdout, stderr)
+		return runList(ctx, deps, command.Flags.JSON, queryFilter, stdout, stderr)
 	case ActionPort:
-		return runPort(ctx, deps, command.Port, command.Flags.JSON, stdout, stderr)
+		return runPort(ctx, deps, command.Port, command.Flags.JSON, queryFilter, stdout, stderr)
 	case ActionPortRange:
-		return runPortRange(ctx, deps, command.Port, command.PortEnd, command.Flags.JSON, stdout, stderr)
+		return runPortRange(ctx, deps, command.Port, command.PortEnd, command.Flags.JSON, queryFilter, stdout, stderr)
 	case ActionPortSet:
-		return runPortSet(ctx, deps, command.Ports, command.Flags.JSON, stdout, stderr)
+		return runPortSet(ctx, deps, command.Ports, command.Flags.JSON, queryFilter, stdout, stderr)
 	case ActionFree:
 		freeOutput := stdout
 		if command.Flags.JSON {
@@ -276,11 +302,22 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	case ActionWatch:
 		var err error
 		if command.Flags.JSON {
-			err = WatchJSON(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, stdout, stderr)
+			err = WatchJSONWithFilter(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, queryFilter, stdout, stderr)
 		} else {
-			err = Watch(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, stdout, stderr)
+			err = WatchWithFilter(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, queryFilter, stdout, stderr)
 		}
 		if err != nil && !errors.Is(err, context.Canceled) {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
+	case ActionInfo:
+		var err error
+		if command.Flags.JSON {
+			err = InfoJSON(ctx, deps.Scanner, deps.Manager, command.PID, stdout)
+		} else {
+			err = Info(ctx, deps.Scanner, deps.Manager, command.PID, stdout)
+		}
+		if err != nil {
 			PrintError(stderr, err)
 		}
 		return ExitCode(err)
@@ -357,14 +394,13 @@ func parsePortSet(value string) ([]int, error) {
 	return ports, nil
 }
 
-func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr io.Writer) int {
+func runList(ctx context.Context, deps Dependencies, asJSON bool, filter QueryFilter, stdout, stderr io.Writer) int {
 	ports, err := deps.Scanner.List(ctx)
 	if err != nil {
 		PrintError(stderr, err)
 		return ExitCode(err)
 	}
-	infos, infoErrors := resolveProcessInfos(ctx, deps.Manager, ports)
-	applyProcessNames(ports, infos)
+	ports, infos, infoErrors := filterPorts(ctx, deps.Manager, ports, filter)
 	reportProcessInfoErrors(stderr, infoErrors)
 	var renderErr error
 	if asJSON {
@@ -379,7 +415,7 @@ func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr
 	return ExitSuccess
 }
 
-func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool, stdout, stderr io.Writer) int {
+func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool, filter QueryFilter, stdout, stderr io.Writer) int {
 	ports, err := deps.Scanner.Port(ctx, portNumber)
 	if err != nil {
 		PrintError(stderr, err)
@@ -396,19 +432,28 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 		_, _ = fmt.Fprintf(stdout, "Port %d is available.\n", portNumber)
 		return ExitSuccess
 	}
-	infos := make(map[int]model.ProcessInfo, len(ports))
-	for _, record := range ports {
-		info, infoErr := deps.Manager.Info(ctx, record.PID)
-		if infoErr != nil {
+	ports, infos, infoErrors := filterPorts(ctx, deps.Manager, ports, filter)
+	if len(infoErrors) > 0 {
+		for _, infoErr := range infoErrors {
 			if asJSON {
-				_ = RenderJSONWithServices(stdout, []model.PortInfo{record}, nil, service.Rules{})
-			} else {
-				_ = RenderPorts(stdout, []model.PortInfo{record})
+				_ = RenderJSONWithServices(stdout, ports, infos, service.Rules{})
+			} else if len(ports) > 0 {
+				_ = RenderPorts(stdout, ports)
 			}
 			PrintError(stderr, infoErr)
 			return ExitCode(infoErr)
 		}
-		infos[record.PID] = info
+	}
+	if len(ports) == 0 {
+		if asJSON {
+			if renderErr := RenderJSONWithServices(stdout, nil, nil, service.Rules{}); renderErr != nil {
+				PrintError(stderr, renderErr)
+				return ExitCode(renderErr)
+			}
+			return ExitSuccess
+		}
+		_, _ = fmt.Fprintf(stdout, "Port %d is available.\n", portNumber)
+		return ExitSuccess
 	}
 	if asJSON {
 		if renderErr := RenderJSONWithServices(stdout, ports, infos, service.Rules{}); renderErr != nil {
@@ -426,7 +471,7 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 	return ExitSuccess
 }
 
-func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON bool, stdout, stderr io.Writer) int {
+func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON bool, filter QueryFilter, stdout, stderr io.Writer) int {
 	ports, err := deps.Scanner.List(ctx)
 	if err != nil {
 		PrintError(stderr, err)
@@ -438,8 +483,7 @@ func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON
 			filtered = append(filtered, record)
 		}
 	}
-	infos, infoErrors := resolveProcessInfos(ctx, deps.Manager, filtered)
-	applyProcessNames(filtered, infos)
+	filtered, infos, infoErrors := filterPorts(ctx, deps.Manager, filtered, filter)
 	reportProcessInfoErrors(stderr, infoErrors)
 	if asJSON {
 		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
@@ -455,7 +499,7 @@ func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON
 	return ExitSuccess
 }
 
-func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON bool, stdout, stderr io.Writer) int {
+func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON bool, filter QueryFilter, stdout, stderr io.Writer) int {
 	wanted := make(map[int]struct{}, len(requested))
 	for _, port := range requested {
 		wanted[port] = struct{}{}
@@ -471,8 +515,7 @@ func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON 
 			filtered = append(filtered, record)
 		}
 	}
-	infos, infoErrors := resolveProcessInfos(ctx, deps.Manager, filtered)
-	applyProcessNames(filtered, infos)
+	filtered, infos, infoErrors := filterPorts(ctx, deps.Manager, filtered, filter)
 	reportProcessInfoErrors(stderr, infoErrors)
 	if asJSON {
 		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {

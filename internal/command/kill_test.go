@@ -31,3 +31,14 @@ func TestKillTerminatesAndVerifies(t *testing.T) {
 		t.Fatalf("terminated=%v output=%q", manager.terminated, out.String())
 	}
 }
+
+func TestKillRefusesProtectedPID(t *testing.T) {
+	manager := &freeManager{infos: map[int]model.ProcessInfo{4: sampleProcess(4)}}
+	err := Kill(context.Background(), manager, 4, strings.NewReader("yes\n"), &strings.Builder{})
+	if !errors.Is(err, ErrProtectedProcess) {
+		t.Fatalf("Kill() error = %v, want protected process", err)
+	}
+	if len(manager.terminated) != 0 {
+		t.Fatalf("terminated=%v, want none", manager.terminated)
+	}
+}

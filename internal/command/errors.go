@@ -16,10 +16,14 @@ import (
 // Exit codes returned by the command entry point.
 const (
 	ExitSuccess    = 0
-	ExitSystem     = 1
 	ExitArguments  = 2
-	ExitPermission = 3
-	ExitCancelled  = 4
+	ExitOperation  = 3
+	ExitPermission = 4
+	ExitKill       = 5
+	// ExitSystem is kept as a source-compatible alias for operation failures.
+	ExitSystem = ExitOperation
+	// ExitCancelled is zero because cancellation is a successful user decision.
+	ExitCancelled = ExitSuccess
 )
 
 // ExitCode maps an operation error to the stable CLI exit code. It never
@@ -29,10 +33,10 @@ func ExitCode(err error) int {
 		return ExitSuccess
 	}
 	if errors.Is(err, context.Canceled) {
-		return ExitCancelled
+		return ExitSuccess
 	}
 	if errors.Is(err, ErrUserCancelled) {
-		return ExitCancelled
+		return ExitSuccess
 	}
 	if isArgumentError(err) {
 		return ExitArguments
@@ -40,7 +44,10 @@ func ExitCode(err error) int {
 	if errors.Is(err, process.ErrAccessDenied) || errors.Is(err, os.ErrPermission) || os.IsPermission(err) {
 		return ExitPermission
 	}
-	return ExitSystem
+	if errors.Is(err, ErrKillFailed) || errors.Is(err, ErrPortStillOccupied) || errors.Is(err, ErrProtectedProcess) {
+		return ExitKill
+	}
+	return ExitOperation
 }
 
 func isArgumentError(err error) bool {
@@ -84,6 +91,10 @@ func errorMessage(err error) string {
 		return "process not found"
 	case errors.Is(err, process.ErrNotSupported), errors.Is(err, port.ErrUnsupported):
 		return "operation is not supported on this platform"
+	case errors.Is(err, ErrProtectedProcess):
+		return "refusing to terminate a protected process"
+	case errors.Is(err, ErrKillFailed), errors.Is(err, ErrPortStillOccupied):
+		return cleanMessage(err.Error())
 	default:
 		return "operation failed: " + cleanMessage(err.Error())
 	}

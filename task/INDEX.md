@@ -68,4 +68,13 @@ Each future card is intentionally isolated in its own files and must not be sche
 ## V4 Product Planning
 
 V4 的产品范围、JSON 合同、退出码、安全边界和建议任务拆分见
-[`../prd/v4.md`](../prd/v4.md)。V4 任务默认不立即执行，必须由主控 Agent 按依赖关系调度。
+[`../prd/v4.md`](../prd/v4.md)。V4 任务原计划按依赖关系调度，当前实现已完成并保留该拆分供后续维护。
+
+## V4 Implementation Status
+
+| Task | 状态 | 实现位置 |
+| --- | --- | --- |
+| V4-01 至 V4-03 | done | `internal/command/filter.go`, `flags.go`, `root.go`, `watch.go` |
+| V4-04 至 V4-06 | done | `pkg/model/json.go`, `internal/command/info.go` |
+| V4-07 至 V4-08 | done | `internal/command/errors.go`, `kill.go`, `free.go` |
+| V4-09 至 V4-10 | done | CI/build 验证、`README.md`、`prd/v4.md` |

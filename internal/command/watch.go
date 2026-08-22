@@ -15,15 +15,23 @@ import (
 )
 
 func Watch(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, out, errOut io.Writer) error {
-	return watchOutput(ctx, scanner, manager, interval, portNumber, false, out, errOut)
+	return WatchWithFilter(ctx, scanner, manager, interval, portNumber, QueryFilter{}, out, errOut)
+}
+
+func WatchWithFilter(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, filter QueryFilter, out, errOut io.Writer) error {
+	return watchOutput(ctx, scanner, manager, interval, portNumber, filter, false, out, errOut)
 }
 
 // WatchJSON writes one JSON object per port change event.
 func WatchJSON(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, out, errOut io.Writer) error {
-	return watchOutput(ctx, scanner, manager, interval, portNumber, true, out, errOut)
+	return WatchJSONWithFilter(ctx, scanner, manager, interval, portNumber, QueryFilter{}, out, errOut)
 }
 
-func watchOutput(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, asJSON bool, out, errOut io.Writer) error {
+func WatchJSONWithFilter(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, filter QueryFilter, out, errOut io.Writer) error {
+	return watchOutput(ctx, scanner, manager, interval, portNumber, filter, true, out, errOut)
+}
+
+func watchOutput(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, filter QueryFilter, asJSON bool, out, errOut io.Writer) error {
 	if out == nil || errOut == nil {
 		return errors.New("watch output writer is nil")
 	}
@@ -48,7 +56,10 @@ func watchOutput(ctx context.Context, scanner port.Scanner, manager process.Mana
 			return record
 		},
 		Filter: func(record model.PortInfo) bool {
-			return portNumber == 0 || record.Port == portNumber
+			if portNumber != 0 && record.Port != portNumber {
+				return false
+			}
+			return filter.matchesProcess(model.ProcessInfo{Name: record.ProcessName}, record)
 		},
 	}).Run(ctx, func(event watch.Event) error {
 		processName := event.Port.ProcessName

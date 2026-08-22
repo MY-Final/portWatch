@@ -47,6 +47,11 @@ func Free(ctx context.Context, scanner port.Scanner, manager process.Manager, po
 		_, _ = fmt.Fprintf(out, "Port %d is available.\n", portNumber)
 		return nil
 	}
+	for _, record := range records {
+		if err := validateKillTarget(record.PID); err != nil {
+			return err
+		}
+	}
 
 	infos := make([]model.ProcessInfo, 0, len(records))
 	for _, record := range records {
@@ -79,7 +84,7 @@ func Free(ctx context.Context, scanner port.Scanner, manager process.Manager, po
 			continue
 		}
 		if err := manager.Terminate(ctx, record.PID); err != nil {
-			return fmt.Errorf("terminate pid %d (%s): %w", record.PID, infos[i].Name, err)
+			return fmt.Errorf("%w: terminate pid %d (%s): %w", ErrKillFailed, record.PID, infos[i].Name, err)
 		}
 		terminated[record.PID] = struct{}{}
 	}
@@ -87,10 +92,10 @@ func Free(ctx context.Context, scanner port.Scanner, manager process.Manager, po
 	_, _ = fmt.Fprintln(out, "Verifying port release...")
 	remaining, err := scanner.Port(ctx, portNumber)
 	if err != nil {
-		return fmt.Errorf("verify port %d: %w", portNumber, err)
+		return fmt.Errorf("%w: verify port %d: %w", ErrKillFailed, portNumber, err)
 	}
 	if len(remaining) != 0 {
-		return fmt.Errorf("%w: port %d still has %d listener(s)", ErrPortStillOccupied, portNumber, len(remaining))
+		return fmt.Errorf("%w: %w: port %d still has %d listener(s)", ErrKillFailed, ErrPortStillOccupied, portNumber, len(remaining))
 	}
 	_, _ = fmt.Fprintf(out, "Port %d is now available.\n", portNumber)
 	return nil
