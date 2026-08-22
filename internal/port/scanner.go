@@ -26,3 +26,11 @@ type Scanner interface {
 	List(ctx context.Context) ([]model.PortInfo, error)
 	Port(ctx context.Context, number int) ([]model.PortInfo, error)
 }
+
+// ProtocolScanner is an optional extension for scanners that support more
+// than the default TCP listener view. Protocol names are tcp, udp, or all.
+type ProtocolScanner interface {
+	Scanner
+	ListProtocol(context.Context, string) ([]model.PortInfo, error)
+	PortProtocol(context.Context, int, string) ([]model.PortInfo, error)
+}

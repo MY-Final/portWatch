@@ -19,7 +19,7 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 - 实时监听端口变化：`portwatch --interval 2s watch`
 - 只监听一个端口：`portwatch watch 8080`
 - 交互式终端界面：`portwatch tui`
-- `--help`、`--version` 和 `--protocol tcp`
+- `--help`、`--version` 和 `--protocol tcp|udp|all`
 
 `free` 会先显示进程详情并要求输入 `y` 或 `yes`，终止后重新扫描端口；直接回车或输入其他内容都会取消操作。
 
@@ -63,6 +63,12 @@ portwatch 3000-4000
 
 # 查看指定端口集合
 portwatch --ports 3000,8080,8848
+
+# 查看 UDP 绑定端口（Windows）
+portwatch --protocol udp
+
+# 查看 TCP 和 UDP 端口（Windows）
+portwatch --protocol all
 
 # 查看全部监听端口
 portwatch
@@ -113,7 +119,7 @@ Windows 使用 IP Helper API 扫描 IPv4/IPv6 TCP 监听端口，并通过 Windo
 进程 API 和 WMI 获取进程详情。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
 这两个平台的实现已包含在代码中，但建议在目标系统上单独验证权限和命令可用性。
 
-当前 CLI 只扫描 TCP 监听端口，`--protocol` 暂时只接受 `tcp`。TUI 可以通过 `portwatch tui` 显式启动；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
+Windows CLI 支持 TCP 监听端口和 UDP 绑定端口，`--protocol` 可选 `tcp`、`udp` 或 `all`；Linux/macOS 当前只实现 TCP，使用 UDP 时会返回明确的不支持错误。TUI 可以通过 `portwatch tui` 显式启动；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
 
 ## 开发
 

@@ -171,6 +171,16 @@ func TestParsePortSetRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestParseProtocolNormalizesSupportedValue(t *testing.T) {
+	got, err := Parse([]string{"--protocol", "UDP", "8080"})
+	if err != nil {
+		t.Fatalf("Parse(protocol) error = %v", err)
+	}
+	if got.Flags.Protocol != "udp" {
+		t.Fatalf("protocol = %q, want udp", got.Flags.Protocol)
+	}
+}
+
 func TestRunJSONDoesNotWriteTableOnProcessInfoError(t *testing.T) {
 	deps := Dependencies{
 		Scanner: onePortScanner{record: model.PortInfo{Port: 8080, Protocol: "TCP", PID: 42}},
@@ -223,6 +233,45 @@ type rangeScanner struct {
 
 func (s rangeScanner) List(context.Context) ([]model.PortInfo, error)      { return s.ports, nil }
 func (s rangeScanner) Port(context.Context, int) ([]model.PortInfo, error) { return nil, nil }
+
+type protocolRootScanner struct {
+	ports []model.PortInfo
+}
+
+func (s protocolRootScanner) List(context.Context) ([]model.PortInfo, error) { return s.ports, nil }
+func (s protocolRootScanner) Port(context.Context, int) ([]model.PortInfo, error) {
+	return s.ports, nil
+}
+func (s protocolRootScanner) ListProtocol(context.Context, string) ([]model.PortInfo, error) {
+	return s.ports, nil
+}
+func (s protocolRootScanner) PortProtocol(context.Context, int, string) ([]model.PortInfo, error) {
+	return s.ports, nil
+}
+
+func TestRunProtocolUsesOptionalScanner(t *testing.T) {
+	deps := Dependencies{
+		Scanner: protocolRootScanner{ports: []model.PortInfo{{Port: 5353, Protocol: "UDP", State: "BOUND", PID: 7}}},
+		Manager: fakeRootManager{},
+	}
+	var stdout, stderr strings.Builder
+	code := run(context.Background(), []string{"--json", "--protocol", "udp"}, deps, strings.NewReader(""), &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("run() code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"protocol":"UDP"`) {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestRunProtocolReportsUnsupportedScanner(t *testing.T) {
+	deps := Dependencies{Scanner: fakeRootScanner{}, Manager: fakeRootManager{}}
+	var stdout, stderr strings.Builder
+	code := run(context.Background(), []string{"--protocol", "udp"}, deps, strings.NewReader(""), &stdout, &stderr)
+	if code != ExitSystem || !strings.Contains(stderr.String(), "not supported") {
+		t.Fatalf("code=%d stderr=%q", code, stderr.String())
+	}
+}
 
 func TestRunPortRangeJSONFiltersAndSorts(t *testing.T) {
 	deps := Dependencies{

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/portwatch/portwatch/internal/port"
 	"github.com/portwatch/portwatch/internal/service"
 	"github.com/portwatch/portwatch/internal/tui"
 	"github.com/portwatch/portwatch/pkg/model"
@@ -222,6 +223,14 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		PrintError(stderr, err)
 		return ExitCode(err)
 	}
+	if command.Action != ActionKill {
+		activeScanner, scannerErr := scannerForProtocol(deps.Scanner, command.Flags.Protocol)
+		if scannerErr != nil {
+			PrintError(stderr, scannerErr)
+			return ExitCode(scannerErr)
+		}
+		deps.Scanner = activeScanner
+	}
 
 	switch command.Action {
 	case ActionList:
@@ -283,6 +292,30 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	}
 }
 
+type protocolScannerAdapter struct {
+	scanner  port.ProtocolScanner
+	protocol string
+}
+
+func (s protocolScannerAdapter) List(ctx context.Context) ([]model.PortInfo, error) {
+	return s.scanner.ListProtocol(ctx, s.protocol)
+}
+
+func (s protocolScannerAdapter) Port(ctx context.Context, number int) ([]model.PortInfo, error) {
+	return s.scanner.PortProtocol(ctx, number, s.protocol)
+}
+
+func scannerForProtocol(scanner PortScanner, protocol string) (PortScanner, error) {
+	if protocol == "tcp" {
+		return scanner, nil
+	}
+	protocolScanner, ok := scanner.(port.ProtocolScanner)
+	if !ok {
+		return nil, port.ErrUnsupported
+	}
+	return protocolScannerAdapter{scanner: protocolScanner, protocol: protocol}, nil
+}
+
 func parsePortRange(value string) (int, int, error) {
 	parts := strings.Split(value, "-")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -326,14 +359,22 @@ func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr
 		return ExitCode(err)
 	}
 	infos := make(map[int]model.ProcessInfo, len(ports))
+	var infoFailure error
+	infoFailures := 0
 	for i := range ports {
 		info, infoErr := deps.Manager.Info(ctx, ports[i].PID)
 		if infoErr != nil {
-			PrintError(stderr, infoErr)
+			infoFailures++
+			if infoFailure == nil {
+				infoFailure = infoErr
+			}
 			continue
 		}
 		infos[ports[i].PID] = info
 		ports[i].ProcessName = info.Name
+	}
+	if infoFailure != nil {
+		PrintError(stderr, fmt.Errorf("process information unavailable for %d record(s): %w", infoFailures, infoFailure))
 	}
 	var renderErr error
 	if asJSON {
@@ -408,14 +449,22 @@ func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON
 		}
 	}
 	infos := make(map[int]model.ProcessInfo, len(filtered))
+	var infoFailure error
+	infoFailures := 0
 	for i := range filtered {
 		info, infoErr := deps.Manager.Info(ctx, filtered[i].PID)
 		if infoErr != nil {
-			PrintError(stderr, infoErr)
+			infoFailures++
+			if infoFailure == nil {
+				infoFailure = infoErr
+			}
 			continue
 		}
 		infos[filtered[i].PID] = info
 		filtered[i].ProcessName = info.Name
+	}
+	if infoFailure != nil {
+		PrintError(stderr, fmt.Errorf("process information unavailable for %d record(s): %w", infoFailures, infoFailure))
 	}
 	if asJSON {
 		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
@@ -448,14 +497,22 @@ func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON 
 		}
 	}
 	infos := make(map[int]model.ProcessInfo, len(filtered))
+	var infoFailure error
+	infoFailures := 0
 	for i := range filtered {
 		info, infoErr := deps.Manager.Info(ctx, filtered[i].PID)
 		if infoErr != nil {
-			PrintError(stderr, infoErr)
+			infoFailures++
+			if infoFailure == nil {
+				infoFailure = infoErr
+			}
 			continue
 		}
 		infos[filtered[i].PID] = info
 		filtered[i].ProcessName = info.Name
+	}
+	if infoFailure != nil {
+		PrintError(stderr, fmt.Errorf("process information unavailable for %d record(s): %w", infoFailures, infoFailure))
 	}
 	if asJSON {
 		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {

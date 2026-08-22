@@ -41,7 +41,8 @@ func parseFlags(args []string) (flagOptions, []string, error) {
 	if err := set.Parse(args); err != nil {
 		return flagOptions{}, nil, fmt.Errorf("parse flags: %w", err)
 	}
-	if !strings.EqualFold(options.Protocol, "tcp") {
+	options.Protocol = strings.ToLower(options.Protocol)
+	if options.Protocol != "tcp" && options.Protocol != "udp" && options.Protocol != "all" {
 		return flagOptions{}, nil, fmt.Errorf("unsupported protocol %q", options.Protocol)
 	}
 	return options, set.Args(), nil
