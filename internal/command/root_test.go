@@ -40,9 +40,8 @@ func TestParseRootErrors(t *testing.T) {
 	}{
 		{name: "non numeric", args: []string{"abc"}, kind: ParseErrorInvalidPort},
 		{name: "out of range", args: []string{"65536"}, kind: ParseErrorInvalidPort},
-		{name: "unknown command", args: []string{"find", "8080"}, kind: ParseErrorUnknownCommand},
+		{name: "unknown command", args: []string{"wat", "8080"}, kind: ParseErrorUnknownCommand},
 		{name: "free without port", args: []string{"free"}, kind: ParseErrorFree},
-		{name: "help", args: []string{"--help"}, kind: ParseErrorHelp},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -58,6 +57,18 @@ func TestParseRootErrors(t *testing.T) {
 				t.Fatalf("error kind = %d, want %d", parseErr.Kind, tt.kind)
 			}
 		})
+	}
+}
+
+func TestParseHelpAndVersion(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"--version"}} {
+		got, err := Parse(args)
+		if err != nil {
+			t.Fatalf("Parse(%v) error = %v", args, err)
+		}
+		if got.Action != ActionHelp && got.Action != ActionVersion {
+			t.Fatalf("Parse(%v) action = %v", args, got.Action)
+		}
 	}
 }
 

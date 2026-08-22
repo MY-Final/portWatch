@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/portwatch/portwatch/pkg/model"
 )
@@ -40,6 +41,11 @@ const (
 	ActionList Action = iota
 	ActionPort
 	ActionFree
+	ActionKill
+	ActionFind
+	ActionWatch
+	ActionHelp
+	ActionVersion
 )
 
 // Command is the parsed root command. Port is set for ActionPort and
@@ -47,6 +53,9 @@ const (
 type Command struct {
 	Action Action
 	Port   int
+	PID    int
+	Query  string
+	Flags  flagOptions
 }
 
 // Parse parses the MVP root arguments without executing any platform work.
@@ -54,14 +63,26 @@ type Command struct {
 // argument means inspect that port. Other commands are reserved for later
 // wiring and return a structured ParseError.
 func Parse(args []string) (Command, error) {
-	switch len(args) {
+	options, positional, flagErr := parseFlags(args)
+	if flagErr != nil {
+		return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: flagErr.Error(), Message: flagErr.Error()}
+	}
+	if options.Help {
+		return Command{Action: ActionHelp, Flags: options}, nil
+	}
+	if options.Version {
+		return Command{Action: ActionVersion, Flags: options}, nil
+	}
+	if len(positional) == 0 {
+		return Command{Action: ActionList, Flags: options}, nil
+	}
+	switch len(positional) {
 	case 0:
-		return Command{Action: ActionList}, nil
 	case 1:
-		arg := args[0]
+		arg := positional[0]
 		switch arg {
-		case "help", "-h", "--help":
-			return Command{}, &ParseError{Kind: ParseErrorHelp, Argument: arg, Message: "help is not available yet"}
+		case "help":
+			return Command{Action: ActionHelp, Flags: options}, nil
 		case "free":
 			return Command{}, &ParseError{Kind: ParseErrorFree, Argument: arg, Message: "free requires a port and is not available yet"}
 		}
@@ -69,17 +90,31 @@ func Parse(args []string) (Command, error) {
 		if err != nil || port < 1 || port > 65535 {
 			return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: arg, Message: "port must be a number from 1 to 65535"}
 		}
-		return Command{Action: ActionPort, Port: port}, nil
+		return Command{Action: ActionPort, Port: port, Flags: options}, nil
 	case 2:
-		if args[0] == "free" {
-			port, err := strconv.Atoi(args[1])
+		if positional[0] == "free" {
+			port, err := strconv.Atoi(positional[1])
 			if err != nil || port < 1 || port > 65535 {
-				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: args[1], Message: "port must be a number from 1 to 65535"}
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: positional[1], Message: "port must be a number from 1 to 65535"}
 			}
-			return Command{Action: ActionFree, Port: port}, nil
+			return Command{Action: ActionFree, Port: port, Flags: options}, nil
+		}
+		if positional[0] == "kill" {
+			pid, err := strconv.Atoi(positional[1])
+			if err != nil || pid <= 0 {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPID, Argument: positional[1], Message: "pid must be a positive number"}
+			}
+			return Command{Action: ActionKill, PID: pid, Flags: options}, nil
+		}
+		if positional[0] == "find" && strings.TrimSpace(positional[1]) != "" {
+			return Command{Action: ActionFind, Query: positional[1], Flags: options}, nil
+		}
+	case 3:
+		if positional[0] == "find" && strings.TrimSpace(positional[1]) != "" {
+			return Command{Action: ActionFind, Query: strings.Join(positional[1:], " "), Flags: options}, nil
 		}
 	}
-	return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: args[0], Message: "unknown command or arguments"}
+	return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: positional[0], Message: "unknown command or arguments"}
 }
 
 // ParseErrorKind identifies the reason a root argument list was rejected.
@@ -90,6 +125,7 @@ const (
 	ParseErrorUnknownCommand
 	ParseErrorHelp
 	ParseErrorFree
+	ParseErrorInvalidPID
 )
 
 // ParseError is a machine-readable root argument error.
@@ -124,16 +160,23 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	if err != nil {
 		var parseErr *ParseError
 		if errors.As(err, &parseErr) {
-			if parseErr.Kind == ParseErrorHelp {
-				_, _ = fmt.Fprintln(stdout, "PortWatch - Windows TCP port diagnostics")
-				_, _ = fmt.Fprintln(stdout, "Usage: portwatch [port] | portwatch free <port>")
-				return ExitSuccess
-			}
 			_, _ = fmt.Fprintf(stderr, "portwatch: %s\nusage: portwatch [port]\n", parseErr)
 		} else {
 			_, _ = fmt.Fprintf(stderr, "portwatch: %s\n", err)
 		}
 		return ExitCode(err)
+	}
+	if command.Action == ActionHelp {
+		_, _ = fmt.Fprintln(stdout, "PortWatch - Windows TCP port diagnostics")
+		_, _ = fmt.Fprintln(stdout, "Usage: portwatch [flags] [port]")
+		_, _ = fmt.Fprintln(stdout, "       portwatch free <port>")
+		_, _ = fmt.Fprintln(stdout, "       portwatch kill <pid>")
+		_, _ = fmt.Fprintln(stdout, "       portwatch find <name>")
+		return ExitSuccess
+	}
+	if command.Action == ActionVersion {
+		_, _ = fmt.Fprintln(stdout, Version)
+		return ExitSuccess
 	}
 	if deps.Scanner == nil || deps.Manager == nil {
 		err := errors.New("portwatch dependencies are not configured")
@@ -143,11 +186,32 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 
 	switch command.Action {
 	case ActionList:
-		return runList(ctx, deps, stdout, stderr)
+		return runList(ctx, deps, command.Flags.JSON, stdout, stderr)
 	case ActionPort:
-		return runPort(ctx, deps, command.Port, stdout, stderr)
+		return runPort(ctx, deps, command.Port, command.Flags.JSON, stdout, stderr)
 	case ActionFree:
-		err := Free(ctx, deps.Scanner, deps.Manager, command.Port, stdin, stdout)
+		freeOutput := stdout
+		if command.Flags.JSON {
+			freeOutput = stderr
+		}
+		err := Free(ctx, deps.Scanner, deps.Manager, command.Port, stdin, freeOutput)
+		if command.Flags.JSON {
+			if jsonErr := RenderFreeJSON(stdout, command.Port, err); jsonErr != nil && err == nil {
+				err = jsonErr
+			}
+		}
+		if err != nil {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
+	case ActionKill:
+		err := Kill(ctx, deps.Manager, command.PID, stdin, stdout)
+		if err != nil {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
+	case ActionFind:
+		err := Find(ctx, deps.Scanner, deps.Manager, command.Query, stdout)
 		if err != nil {
 			PrintError(stderr, err)
 		}
@@ -159,37 +223,53 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	}
 }
 
-func runList(ctx context.Context, deps Dependencies, stdout, stderr io.Writer) int {
+func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr io.Writer) int {
 	ports, err := deps.Scanner.List(ctx)
 	if err != nil {
 		PrintError(stderr, err)
 		return ExitCode(err)
 	}
+	infos := make(map[int]model.ProcessInfo, len(ports))
 	for i := range ports {
 		info, infoErr := deps.Manager.Info(ctx, ports[i].PID)
 		if infoErr != nil {
 			PrintError(stderr, infoErr)
 			continue
 		}
+		infos[ports[i].PID] = info
 		ports[i].ProcessName = info.Name
 	}
-	if err := RenderPorts(stdout, ports); err != nil {
-		PrintError(stderr, err)
-		return ExitCode(err)
+	var renderErr error
+	if asJSON {
+		renderErr = RenderJSON(stdout, ports, infos)
+	} else {
+		renderErr = RenderPorts(stdout, ports)
+	}
+	if renderErr != nil {
+		PrintError(stderr, renderErr)
+		return ExitCode(renderErr)
 	}
 	return ExitSuccess
 }
 
-func runPort(ctx context.Context, deps Dependencies, portNumber int, stdout, stderr io.Writer) int {
+func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool, stdout, stderr io.Writer) int {
 	ports, err := deps.Scanner.Port(ctx, portNumber)
 	if err != nil {
 		PrintError(stderr, err)
 		return ExitCode(err)
 	}
 	if len(ports) == 0 {
+		if asJSON {
+			if renderErr := RenderJSON(stdout, nil, nil); renderErr != nil {
+				PrintError(stderr, renderErr)
+				return ExitCode(renderErr)
+			}
+			return ExitSuccess
+		}
 		_, _ = fmt.Fprintf(stdout, "Port %d is available.\n", portNumber)
 		return ExitSuccess
 	}
+	infos := make(map[int]model.ProcessInfo, len(ports))
 	for _, record := range ports {
 		info, infoErr := deps.Manager.Info(ctx, record.PID)
 		if infoErr != nil {
@@ -197,9 +277,19 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, stdout, std
 			PrintError(stderr, infoErr)
 			return ExitCode(infoErr)
 		}
-		if renderErr := RenderProcess(stdout, info, record); renderErr != nil {
+		infos[record.PID] = info
+	}
+	if asJSON {
+		if renderErr := RenderJSON(stdout, ports, infos); renderErr != nil {
 			PrintError(stderr, renderErr)
 			return ExitCode(renderErr)
+		}
+	} else {
+		for _, record := range ports {
+			if renderErr := RenderProcess(stdout, infos[record.PID], record); renderErr != nil {
+				PrintError(stderr, renderErr)
+				return ExitCode(renderErr)
+			}
 		}
 	}
 	return ExitSuccess

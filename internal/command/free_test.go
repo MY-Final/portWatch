@@ -16,7 +16,9 @@ type freeScanner struct {
 	err       error
 }
 
-func (s *freeScanner) List(context.Context) ([]model.PortInfo, error) { return nil, nil }
+func (s *freeScanner) List(context.Context) ([]model.PortInfo, error) {
+	return append([]model.PortInfo(nil), s.initial...), nil
+}
 
 func (s *freeScanner) Port(context.Context, int) ([]model.PortInfo, error) {
 	s.calls++
