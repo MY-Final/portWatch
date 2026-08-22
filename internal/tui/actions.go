@@ -24,10 +24,12 @@ func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
 		default:
 			if key.Type == tea.KeyRunes {
 				m.Filter += string(key.Runes)
+				m.normalizeSelection()
 			}
 		}
 		return m, nil
 	}
+	m.normalizeSelection()
 	switch key.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -37,12 +39,20 @@ func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
 		m.Filtering = true
 		m.Filter = ""
 	case "up":
-		if m.Selected > 0 {
-			m.Selected--
+		indexes := m.visibleIndexes()
+		for position, index := range indexes {
+			if index == m.Selected && position > 0 {
+				m.Selected = indexes[position-1]
+				break
+			}
 		}
 	case "down":
-		if m.Selected < len(m.Ports)-1 {
-			m.Selected++
+		indexes := m.visibleIndexes()
+		for position, index := range indexes {
+			if index == m.Selected && position+1 < len(indexes) {
+				m.Selected = indexes[position+1]
+				break
+			}
 		}
 	case "enter":
 		if len(m.Ports) > 0 {
@@ -67,11 +77,31 @@ func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
 				if err := m.Manager.Terminate(context.Background(), pid); err != nil {
 					return killDoneMsg{err: err}
 				}
+				exists, err := m.Manager.Exists(context.Background(), pid)
+				if err != nil {
+					return killDoneMsg{err: fmt.Errorf("verify pid %d termination: %w", pid, err)}
+				}
+				if exists {
+					return killDoneMsg{err: fmt.Errorf("pid %d still exists after termination", pid)}
+				}
 				return killDoneMsg{}
 			}
 		}
 	}
 	return m, nil
+}
+
+func (m *Model) normalizeSelection() {
+	indexes := m.visibleIndexes()
+	if len(indexes) == 0 {
+		return
+	}
+	for _, index := range indexes {
+		if index == m.Selected {
+			return
+		}
+	}
+	m.Selected = indexes[0]
 }
 
 func display(values ...string) string {

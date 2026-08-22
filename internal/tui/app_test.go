@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -48,5 +49,43 @@ func TestModelFilterInput(t *testing.T) {
 	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if model := updated.(Model); model.Filtering || model.Filter != "" {
 		t.Fatalf("escape did not clear filter: %+v", model)
+	}
+}
+
+func TestModelFilterMatchesPortAndKeepsSelectionVisible(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{
+		{Port: 3000, PID: 11, ProcessName: "node.exe"},
+		{Port: 8080, PID: 22, ProcessName: "java.exe"},
+	}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'8'}})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model := updated.(Model)
+	if model.Selected != 1 || !strings.Contains(model.View(), "java.exe") || strings.Contains(model.View(), "node.exe") {
+		t.Fatalf("model = %+v, view=%q", model, model.View())
+	}
+}
+
+type tuiTestManager struct {
+	exists bool
+}
+
+func (m *tuiTestManager) Info(context.Context, int) (model.ProcessInfo, error) {
+	return model.ProcessInfo{Name: "demo.exe"}, nil
+}
+func (m *tuiTestManager) Exists(context.Context, int) (bool, error) { return m.exists, nil }
+func (m *tuiTestManager) Terminate(context.Context, int) error      { return nil }
+
+func TestModelKillVerificationFailureIsShown(t *testing.T) {
+	manager := &tuiTestManager{exists: true}
+	m := Model{Manager: manager, Ports: []model.PortInfo{{Port: 8080, PID: 42}}}
+	updated, command := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	updated, command = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if command == nil {
+		t.Fatal("kill confirmation did not produce command")
+	}
+	updated, _ = updated.(Model).Update(command())
+	if updated.(Model).Err == nil {
+		t.Fatal("expected verification error")
 	}
 }

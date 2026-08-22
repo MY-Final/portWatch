@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -108,10 +109,8 @@ func (m Model) View() string {
 	if m.Detail != "" {
 		b.WriteString(m.Detail + "\n")
 	}
-	for index, record := range m.Ports {
-		if m.Filter != "" && !strings.Contains(strings.ToLower(record.ProcessName), strings.ToLower(m.Filter)) {
-			continue
-		}
+	for _, index := range m.visibleIndexes() {
+		record := m.Ports[index]
 		marker := " "
 		if index == m.Selected {
 			marker = ">"
@@ -124,6 +123,21 @@ func (m Model) View() string {
 	}
 	b.WriteString("\nR refresh   / filter   Q quit\n")
 	return b.String()
+}
+
+func (m Model) visibleIndexes() []int {
+	indexes := make([]int, 0, len(m.Ports))
+	filter := strings.ToLower(strings.TrimSpace(m.Filter))
+	for index, record := range m.Ports {
+		if filter != "" &&
+			!strings.Contains(strings.ToLower(record.ProcessName), filter) &&
+			!strings.Contains(strconv.Itoa(record.Port), filter) &&
+			!strings.Contains(strconv.Itoa(record.PID), filter) {
+			continue
+		}
+		indexes = append(indexes, index)
+	}
+	return indexes
 }
 
 func displayProcessName(name string) string {
