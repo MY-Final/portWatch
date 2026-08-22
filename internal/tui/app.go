@@ -20,6 +20,7 @@ type Model struct {
 	Infos       map[int]model.ProcessInfo
 	Filter      string
 	Filtering   bool
+	Width       int
 	Err         error
 	Selected    int
 	Detail      string
@@ -65,6 +66,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch value := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKey(value)
+	case tea.WindowSizeMsg:
+		m.Width = value.Width
 	case portsLoadedMsg:
 		m.Ports, m.Infos, m.Err = value.ports, value.infos, nil
 		if m.Selected >= len(m.Ports) {
@@ -113,7 +116,11 @@ func (m Model) View() string {
 		if index == m.Selected {
 			marker = ">"
 		}
-		fmt.Fprintf(&b, "%s%-5d %-10s %-8d %s\n", marker, record.Port, record.Protocol, record.PID, displayProcessName(record.ProcessName))
+		nameWidth := m.Width - 35
+		if nameWidth < 8 {
+			nameWidth = 8
+		}
+		fmt.Fprintf(&b, "%s%-5d %-10s %-8d %s\n", marker, record.Port, record.Protocol, record.PID, fitText(displayProcessName(record.ProcessName), nameWidth))
 	}
 	b.WriteString("\nR refresh   / filter   Q quit\n")
 	return b.String()
@@ -124,6 +131,17 @@ func displayProcessName(name string) string {
 		return "-"
 	}
 	return name
+}
+
+func fitText(value string, width int) string {
+	runes := []rune(value)
+	if width <= 0 || len(runes) <= width {
+		return value
+	}
+	if width <= 3 {
+		return string(runes[:width])
+	}
+	return string(runes[:width-3]) + "..."
 }
 
 func Run(ctx context.Context, scanner port.Scanner, manager process.Manager) error {

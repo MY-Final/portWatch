@@ -129,6 +129,24 @@ func TestParseWatchPort(t *testing.T) {
 	}
 }
 
+func TestRunJSONDoesNotWriteTableOnProcessInfoError(t *testing.T) {
+	deps := Dependencies{
+		Scanner: onePortScanner{record: model.PortInfo{Port: 8080, Protocol: "TCP", PID: 42}},
+		Manager: failingInfoManager{},
+	}
+	var stdout, stderr strings.Builder
+	code := run(context.Background(), []string{"--json", "8080"}, deps, strings.NewReader(""), &stdout, &stderr)
+	if code == ExitSuccess {
+		t.Fatal("run() code = success, want error")
+	}
+	if !strings.HasPrefix(strings.TrimSpace(stdout.String()), "{") || strings.Contains(stdout.String(), "PORT PROTOCOL") {
+		t.Fatalf("stdout = %q, want JSON without table", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "operation failed") {
+		t.Fatalf("stderr = %q, want error", stderr.String())
+	}
+}
+
 type fakeRootScanner struct{}
 
 func (fakeRootScanner) List(context.Context) ([]model.PortInfo, error) { return nil, nil }
@@ -143,3 +161,20 @@ func (fakeRootManager) Info(context.Context, int) (model.ProcessInfo, error) {
 }
 func (fakeRootManager) Exists(context.Context, int) (bool, error) { return false, nil }
 func (fakeRootManager) Terminate(context.Context, int) error      { return nil }
+
+type onePortScanner struct{ record model.PortInfo }
+
+func (s onePortScanner) List(context.Context) ([]model.PortInfo, error) {
+	return []model.PortInfo{s.record}, nil
+}
+func (s onePortScanner) Port(context.Context, int) ([]model.PortInfo, error) {
+	return []model.PortInfo{s.record}, nil
+}
+
+type failingInfoManager struct{}
+
+func (failingInfoManager) Info(context.Context, int) (model.ProcessInfo, error) {
+	return model.ProcessInfo{}, errors.New("metadata unavailable")
+}
+func (failingInfoManager) Exists(context.Context, int) (bool, error) { return false, nil }
+func (failingInfoManager) Terminate(context.Context, int) error      { return nil }

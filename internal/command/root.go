@@ -306,7 +306,11 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 	for _, record := range ports {
 		info, infoErr := deps.Manager.Info(ctx, record.PID)
 		if infoErr != nil {
-			_ = RenderPorts(stdout, []model.PortInfo{record})
+			if asJSON {
+				_ = RenderJSONWithServices(stdout, []model.PortInfo{record}, nil, service.Rules{})
+			} else {
+				_ = RenderPorts(stdout, []model.PortInfo{record})
+			}
 			PrintError(stderr, infoErr)
 			return ExitCode(infoErr)
 		}
