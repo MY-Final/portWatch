@@ -226,13 +226,28 @@ func TestV6ListExplainsPrimaryWorkflow(t *testing.T) {
 	}
 	m.Selected = 1
 	view := m.View()
-	for _, want := range []string{"PortWatch", "LISTENING", "PORT 8080", ">", "java.exe", "Enter Details", "? Help"} {
+	for _, want := range []string{"PortWatch", "LISTENING", "PORT 8080", "> 8080", "Selected: 8080 · PID 22 · java.exe", "Enter Details", "? Help"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("View() missing %q: %s", want, view)
 		}
 	}
 	if strings.Contains(view, "Connections") || strings.Contains(view, "All") {
 		t.Fatalf("list view exposes advanced modes: %s", view)
+	}
+}
+
+func TestSelectionCursorAndSummaryMoveTogether(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{
+		{Port: 3000, PID: 11, ProcessName: "node.exe"},
+		{Port: 8080, PID: 22, ProcessName: "java.exe"},
+	}}
+	if !strings.Contains(m.View(), "> 3000") || !strings.Contains(m.View(), "Selected: 3000 · PID 11 · node.exe") {
+		t.Fatalf("initial cursor/summary missing: %q", m.View())
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if !strings.Contains(m.View(), "> 8080") || !strings.Contains(m.View(), "Selected: 8080 · PID 22 · java.exe") {
+		t.Fatalf("moved cursor/summary missing: %q", m.View())
 	}
 }
 

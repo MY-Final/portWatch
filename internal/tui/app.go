@@ -205,6 +205,7 @@ func (m Model) viewList() string {
 		b.WriteString("\n")
 		m.writeTable(&b)
 	}
+	m.writeSelection(&b)
 	if m.Filtering {
 		fmt.Fprintf(&b, "\nFilter: %s_\n", m.Filter)
 	} else {
@@ -257,9 +258,9 @@ func (m Model) writeTable(b *strings.Builder) {
 	indexes := m.visibleIndexes()
 	for _, index := range indexes {
 		record := m.Ports[index]
-		marker := " "
+		marker := "  "
 		if index == m.Selected {
-			marker = ">"
+			marker = "> "
 		}
 		name := m.processName(record)
 		if m.Width >= 110 {
@@ -286,6 +287,15 @@ func (m Model) writeTable(b *strings.Builder) {
 			b.WriteString("No listening ports found.\n")
 		}
 	}
+}
+
+func (m Model) writeSelection(b *strings.Builder) {
+	record, ok := m.selectedRecord()
+	if !ok {
+		b.WriteString("Selected: -\n")
+		return
+	}
+	fmt.Fprintf(b, "Selected: %d · PID %d · %s\n", record.Port, record.PID, m.processName(record))
 }
 
 func (m Model) viewDetails() string {
