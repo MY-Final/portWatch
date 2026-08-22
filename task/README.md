@@ -1,10 +1,10 @@
 # PortWatch Task Plan
 
-PortWatch 的任务拆分目录。当前仓库只有产品需求文档，代码尚未初始化；所有实现 Agent 以本目录中的目标结构和接口契约为准。
+PortWatch 的任务拆分目录。MVP、V2、V3 和 V4 已经实现；后续实现 Agent 仍以本目录中的目标结构和接口契约为准。
 
 ## 执行规则
 
-- 默认只执行 `phase-01-mvp/`，其他阶段均为规划，不应提前实现。
+- 未明确调度的阶段默认只作为规划，不应自行提前实现。
 - 调度器必须先满足任务依赖；没有依赖的任务可以并行。
 - 一个 Agent 只修改自己任务列出的文件。需要修改同一文件的任务按依赖串行。
 - 平台实现使用 Go build tags；Windows MVP 不应引入 Linux/macOS 代码。
@@ -49,3 +49,5 @@ internal/command/errors.go
 | Phase 2-9 | `phase-02-cli/` 至 `phase-09-release/` | 仅规划 |
 | Backlog | `backlog/` | 低优先级候选 |
 
+TUI 产品重构见 [`../prd/v5-tui-polish.md`](../prd/v5-tui-polish.md)，对应任务位于
+`phase-05-tui-polish/`。该阶段默认先完成任务评审，再按 README 中的依赖图调度。

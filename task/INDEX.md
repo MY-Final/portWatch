@@ -78,3 +78,11 @@ V4 的产品范围、JSON 合同、退出码、安全边界和建议任务拆分
 | V4-04 至 V4-06 | done | `pkg/model/json.go`, `internal/command/info.go` |
 | V4-07 至 V4-08 | done | `internal/command/errors.go`, `kill.go`, `free.go` |
 | V4-09 至 V4-10 | done | CI/build 验证、`README.md`、`prd/v4.md` |
+
+## TUI Polish Proposal
+
+| 范围 | 状态 | 文档 |
+| --- | --- | --- |
+| TUI-Polish-001 至 010 | proposed | [`phase-05-tui-polish/README.md`](phase-05-tui-polish/README.md) |
+
+产品定义见 [`../prd/v5-tui-polish.md`](../prd/v5-tui-polish.md)。本阶段尚未实现，必须先按任务依赖进行拆分和 review。
