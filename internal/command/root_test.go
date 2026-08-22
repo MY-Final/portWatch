@@ -147,6 +147,18 @@ func TestRunJSONDoesNotWriteTableOnProcessInfoError(t *testing.T) {
 	}
 }
 
+func TestRunRejectsZeroWatchInterval(t *testing.T) {
+	deps := Dependencies{Scanner: fakeRootScanner{}, Manager: fakeRootManager{}}
+	var stdout, stderr strings.Builder
+	code := run(context.Background(), []string{"--interval", "0s", "watch"}, deps, strings.NewReader(""), &stdout, &stderr)
+	if code != ExitSystem {
+		t.Fatalf("run() code = %d, want %d", code, ExitSystem)
+	}
+	if !strings.Contains(stderr.String(), "watch interval must be positive") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 type fakeRootScanner struct{}
 
 func (fakeRootScanner) List(context.Context) ([]model.PortInfo, error) { return nil, nil }
