@@ -16,11 +16,11 @@
 | ID | 状态 | 文件 | 主要文件所有权 | 依赖 | Worker | Commit | 测试 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 001 | **done** | `001-project-init.md` | `go.mod`, `.gitignore`, 目录骨架 | 无 | Luna-001 | `e6c150c` (+ `96b0615`) | `go test ./...`; `go build ./...`; `go list ./...` |
-| 002 | **running** | `002-domain-model.md` | `pkg/model/*.go` | 001 | Luna-002 | - | - |
-| 003 | pending | `003-cli-root.md` | `internal/command/root.go`, `cmd/portwatch/main.go` 初稿 | 001, 002 | - | - | - |
-| 004 | pending | `004-port-scanner-interface.md` | `internal/port/scanner.go` | 002 | - | - | - |
+| 002 | **done** | `002-domain-model.md` | `pkg/model/*.go` | 001 | Luna-002 | `69f99a0` | `go test ./pkg/model`; `go test ./...`; `go build ./...` |
+| 003 | **running** | `003-cli-root.md` | `internal/command/root.go`, `cmd/portwatch/main.go` 初稿 | 001, 002 | Luna-003 | - | - |
+| 004 | **running** | `004-port-scanner-interface.md` | `internal/port/scanner.go` | 002 | Luna-004 | - | - |
 | 005 | pending | `005-windows-port-scanner.md` | `internal/port/windows.go` | 004 | - | - | - |
-| 006 | pending | `006-process-manager-interface.md` | `internal/process/manager.go` | 002 | - | - | - |
+| 006 | **running** | `006-process-manager-interface.md` | `internal/process/manager.go` | 002 | Luna-006 | - | - |
 | 007 | pending | `007-windows-process-info.md` | `internal/process/windows.go` | 006 | - | - | - |
 | 008 | pending | `008-kill-process.md` | `internal/process/windows.go` tests/termination additions | 006, 007 | - | - | - |
 | 009 | pending | `009-free-port-command.md` | `internal/command/free.go` | 003, 004, 006, 007, 008 | - | - | - |
