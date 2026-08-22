@@ -1,0 +1,15 @@
+# Build artifacts
+/portwatch
+/bin/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Coverage and temporary files
+coverage.out
+coverage.html
+*.coverprofile
+tmp/
