@@ -114,3 +114,15 @@ func TestRefreshUsesModelContext(t *testing.T) {
 		t.Fatal("refresh did not use model context")
 	}
 }
+
+func TestModelDoesNotActWhenFilterHasNoMatches(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{{Port: 8080, PID: 42, ProcessName: "node.exe"}}, Filter: "missing"}
+	updated, command := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if updated.(Model).Detail != "" || command != nil {
+		t.Fatalf("enter acted on hidden row: model=%+v command=%v", updated, command)
+	}
+	updated, command = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if updated.(Model).ConfirmKill || command != nil {
+		t.Fatalf("kill acted on hidden row: model=%+v command=%v", updated, command)
+	}
+}

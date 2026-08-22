@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/portwatch/portwatch/pkg/model"
 )
 
 func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
@@ -55,20 +57,24 @@ func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {
 			}
 		}
 	case "enter":
-		if len(m.Ports) > 0 {
-			record := m.Ports[m.Selected]
+		if record, ok := m.selectedRecord(); ok {
 			info := m.Infos[record.PID]
 			m.Detail = fmt.Sprintf("Port %d\nProtocol %s\nState %s\nPID %d\nProcess %s\nCommand %s\nExecutable %s", record.Port, record.Protocol, record.State, record.PID, display(info.Name, record.ProcessName), display(info.Command, "-"), display(info.Executable, "-"))
 		}
 	case "k":
-		if len(m.Ports) > 0 {
+		if _, ok := m.selectedRecord(); ok {
 			m.ConfirmKill = true
 		}
 	case "n":
 		m.ConfirmKill = false
 	case "y":
-		if m.ConfirmKill && len(m.Ports) > 0 {
-			pid := m.Ports[m.Selected].PID
+		if m.ConfirmKill {
+			record, ok := m.selectedRecord()
+			if !ok {
+				m.ConfirmKill = false
+				return m, nil
+			}
+			pid := record.PID
 			m.ConfirmKill = false
 			return m, func() tea.Msg {
 				ctx := m.Context
@@ -106,6 +112,18 @@ func (m *Model) normalizeSelection() {
 		}
 	}
 	m.Selected = indexes[0]
+}
+
+func (m Model) selectedRecord() (model.PortInfo, bool) {
+	if m.Selected < 0 || m.Selected >= len(m.Ports) {
+		return model.PortInfo{}, false
+	}
+	for _, index := range m.visibleIndexes() {
+		if index == m.Selected {
+			return m.Ports[index], true
+		}
+	}
+	return model.PortInfo{}, false
 }
 
 func display(values ...string) string {
