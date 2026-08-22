@@ -1,6 +1,7 @@
 package model
 
-const JSONSchemaVersion = "1"
+// JSONSchemaVersion is bumped when the machine-readable response shape changes.
+const JSONSchemaVersion = "2"
 
 // PortResult is the stable, platform-neutral JSON representation of a port
 // and its optional owning process.

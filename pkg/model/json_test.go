@@ -13,7 +13,7 @@ func TestPortResultJSONShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
-	want := `{"schema_version":"1","ports":[{"port":8080,"protocol":"TCP","local_addr":"","remote_addr":"","state":"LISTENING","pid":12,"process_name":"demo.exe","executable":"C:\\demo.exe","command":"demo"}]}`
+	want := `{"schema_version":"2","ports":[{"port":8080,"protocol":"TCP","local_addr":"","remote_addr":"","state":"LISTENING","pid":12,"process_name":"demo.exe","executable":"C:\\demo.exe","command":"demo"}]}`
 	if string(data) != want {
 		t.Fatalf("Marshal() = %s, want %s", data, want)
 	}
