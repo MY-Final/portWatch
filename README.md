@@ -1,46 +1,104 @@
 # PortWatch
 
-PortWatch is a Windows developer CLI for finding TCP listening ports and the
-processes that own them.
+PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以查询 TCP
+监听端口对应的 PID、进程名、命令行和可执行文件路径，也可以在确认后终止占用端口的进程。
 
-## MVP
+## 当前支持
 
-Build on Windows with Go 1.22 or newer:
+- 查询一个端口：`portwatch 8080`
+- 列出全部 TCP `LISTENING` 端口：`portwatch`
+- 释放端口：`portwatch free 8080`
+- 按 PID 终止进程：`portwatch kill 1234`
+- 按进程名搜索：`portwatch find node`
+- JSON 输出：`portwatch --json 8080`
+- 实时监听端口变化：`portwatch --interval 2s watch`
+- `--help`、`--version` 和 `--protocol tcp`
 
-```powershell
-go build -o portwatch.exe ./cmd/portwatch
-```
+`free` 会先显示进程详情并要求输入 `y` 或 `yes`，终止后重新扫描端口；直接回车或输入其他内容都会取消操作。
 
-Inspect one port:
+## Windows 安装
 
-```powershell
-.\portwatch.exe 8080
-```
-
-List all TCP listeners:
-
-```powershell
-.\portwatch.exe
-```
-
-Safely release a port. PortWatch shows the process details, asks for explicit
-confirmation, terminates the process, and scans again to verify release:
+要求 Windows 和 Go 1.22 或更新版本。在项目根目录执行：
 
 ```powershell
-.\portwatch.exe free 8080
+$bin = Join-Path $env:USERPROFILE "bin"
+New-Item -ItemType Directory -Force $bin | Out-Null
+go build -o (Join-Path $bin "portwatch.exe") ./cmd/portwatch
+
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if (($userPath -split ';') -notcontains $bin) {
+    [Environment]::SetEnvironmentVariable(
+        "Path",
+        (($userPath.TrimEnd(';') + ';' + $bin).Trim(';')),
+        "User"
+    )
+}
 ```
 
-Process details that require elevated access may be unavailable. Run the
-terminal as Administrator when Windows reports access denied. The current MVP
-supports Windows TCP LISTENING only; JSON, watch, TUI, Linux, and macOS are
-planned for later phases.
+关闭并重新打开 PowerShell，然后验证：
 
-## Development
+```powershell
+Get-Command portwatch
+portwatch --version
+portwatch 8080
+```
+
+如果查询或终止进程时出现 `access denied`，请使用“以管理员身份运行”的 PowerShell。
+
+## 使用示例
+
+```powershell
+# 查看 8080 端口
+portwatch 8080
+
+# 查看全部监听端口
+portwatch
+
+# 输出稳定 JSON，适合脚本处理
+portwatch --json 8080
+
+# 每 2 秒报告新增或移除的监听端口，按 Ctrl+C 退出
+portwatch --interval 2s watch
+
+# 搜索名称包含 node 的进程
+portwatch find node
+
+# 终止指定 PID（会要求确认）
+portwatch kill 1234
+
+# 释放 8080 端口（会要求确认并验证）
+portwatch free 8080
+```
+
+所有全局选项应放在位置参数或子命令之前，例如使用
+`portwatch --json 8080`，不要写成 `portwatch 8080 --json`。
+
+## 平台说明
+
+Windows 使用 IP Helper API 扫描 IPv4/IPv6 TCP 监听端口，并通过 Windows
+进程 API 和 WMI 获取进程详情。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
+这两个平台的实现已包含在代码中，但建议在目标系统上单独验证权限和命令可用性。
+
+当前 CLI 只扫描 TCP 监听端口，`--protocol` 暂时只接受 `tcp`。TUI、开发服务识别和更丰富的 CLI 交互仍属于后续工作，尚未由根命令自动启动。
+
+## 开发
 
 ```powershell
 go test ./...
+go vet ./...
 go build ./...
 ```
 
-CI tests Windows, Linux, and macOS. Release artifacts are configured through
-GoReleaser for amd64 and arm64 on all three platforms.
+交叉编译示例：
+
+```powershell
+$env:GOOS = "windows"; $env:GOARCH = "amd64"; go build ./cmd/portwatch
+$env:GOOS = "linux";   $env:GOARCH = "amd64"; go build ./cmd/portwatch
+$env:GOOS = "darwin";  $env:GOARCH = "arm64"; go build ./cmd/portwatch
+```
+
+发布配置位于 `.goreleaser.yaml`，CI 配置位于 `.github/workflows/`。
+
+## 任务规划
+
+开发任务和后续阶段见 [`task/README.md`](task/README.md) 与 [`task/INDEX.md`](task/INDEX.md)。
