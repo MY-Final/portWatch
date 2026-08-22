@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-const Version = "0.1.0"
+// Version is overridden by the release build through main.version.
+var Version = "0.1.0"
 
 type flagOptions struct {
 	Protocol string

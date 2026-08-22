@@ -10,9 +10,10 @@ import (
 	"github.com/portwatch/portwatch/internal/process"
 )
 
-var version = command.Version
+var version = "0.1.0"
 
 func main() {
+	command.Version = version
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	deps := command.Dependencies{
