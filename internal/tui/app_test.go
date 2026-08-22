@@ -92,6 +92,20 @@ func TestArrowKeysMoveSelectionByKeyType(t *testing.T) {
 	}
 }
 
+func TestLetterNavigationFallbackMovesSelection(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{{Port: 3000}, {Port: 8080}}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = updated.(Model)
+	if m.Selected != 1 {
+		t.Fatalf("j selected index = %d, want 1", m.Selected)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m = updated.(Model)
+	if m.Selected != 0 {
+		t.Fatalf("u selected index = %d, want 0", m.Selected)
+	}
+}
+
 type tuiTestManager struct {
 	exists bool
 }

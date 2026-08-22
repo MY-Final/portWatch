@@ -49,6 +49,10 @@ func (m Model) handleListKey(key tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key.String() {
+	case "u":
+		m.moveSelection(-1)
+	case "j":
+		m.moveSelection(1)
 	case "r":
 		m.Status = "Refreshing..."
 		return m, m.refresh()

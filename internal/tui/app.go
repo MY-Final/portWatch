@@ -232,7 +232,20 @@ func (m Model) writeHeader(b *strings.Builder) {
 	if m.PortFilter > 0 {
 		label = fmt.Sprintf("%s · PORT %d", label, m.PortFilter)
 	}
-	fmt.Fprintf(b, "\n%s · TCP                         %d results · %s\n", label, count, updated)
+	position := "no selection"
+	if len(m.visibleIndexes()) > 0 {
+		position = fmt.Sprintf("selected %d/%d", visiblePosition(m.visibleIndexes(), m.Selected)+1, count)
+	}
+	fmt.Fprintf(b, "\n%s · TCP                         %d results · %s · %s\n", label, count, updated, position)
+}
+
+func visiblePosition(indexes []int, selected int) int {
+	for position, index := range indexes {
+		if index == selected {
+			return position
+		}
+	}
+	return 0
 }
 
 func (m Model) writeTable(b *strings.Builder) {
