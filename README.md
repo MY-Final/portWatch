@@ -84,6 +84,18 @@ portwatch kill 1234
 portwatch free 8080
 ```
 
+### JSON 契约
+
+JSON 响应顶层包含 `schema_version`。当前版本为 `"2"`，端口结果可能包含可选的
+`service` 对象（例如 `name: "Vite"`）；脚本应先检查 schema 版本，再读取新增字段。
+空结果使用空数组，例如：
+
+```json
+{"schema_version":"2","ports":[]}
+```
+
+`--json free` 和 `--json find <name>` 也使用同一个 schema 版本字段。
+
 所有全局选项应放在位置参数或子命令之前，例如使用
 `portwatch --json 8080`，不要写成 `portwatch 8080 --json`。
 
