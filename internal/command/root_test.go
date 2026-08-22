@@ -273,6 +273,30 @@ func TestRunProtocolReportsUnsupportedScanner(t *testing.T) {
 	}
 }
 
+type countingInfoManager struct{ calls int }
+
+func (m *countingInfoManager) Info(context.Context, int) (model.ProcessInfo, error) {
+	m.calls++
+	return model.ProcessInfo{Name: "demo.exe"}, nil
+}
+func (m *countingInfoManager) Exists(context.Context, int) (bool, error) { return false, nil }
+func (m *countingInfoManager) Terminate(context.Context, int) error      { return nil }
+
+func TestRunCachesProcessInfoByPID(t *testing.T) {
+	manager := &countingInfoManager{}
+	deps := Dependencies{
+		Scanner: rangeScanner{ports: []model.PortInfo{{Port: 5353, PID: 7}, {Port: 5353, PID: 7}}},
+		Manager: manager,
+	}
+	var stdout, stderr strings.Builder
+	if code := run(context.Background(), []string{"--json", "--ports", "5353"}, deps, strings.NewReader(""), &stdout, &stderr); code != ExitSuccess {
+		t.Fatalf("run() code = %d stderr=%q", code, stderr.String())
+	}
+	if manager.calls != 1 {
+		t.Fatalf("Info() calls = %d, want one lookup per PID", manager.calls)
+	}
+}
+
 func TestRunPortRangeJSONFiltersAndSorts(t *testing.T) {
 	deps := Dependencies{
 		Scanner: rangeScanner{ports: []model.PortInfo{{Port: 8080, PID: 2}, {Port: 3000, PID: 1}, {Port: 9000, PID: 3}}},

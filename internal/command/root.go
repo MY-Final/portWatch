@@ -363,24 +363,9 @@ func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr
 		PrintError(stderr, err)
 		return ExitCode(err)
 	}
-	infos := make(map[int]model.ProcessInfo, len(ports))
-	var infoFailure error
-	infoFailures := 0
-	for i := range ports {
-		info, infoErr := deps.Manager.Info(ctx, ports[i].PID)
-		if infoErr != nil {
-			infoFailures++
-			if infoFailure == nil {
-				infoFailure = infoErr
-			}
-			continue
-		}
-		infos[ports[i].PID] = info
-		ports[i].ProcessName = info.Name
-	}
-	if infoFailure != nil {
-		PrintError(stderr, fmt.Errorf("process information unavailable for %d record(s): %w", infoFailures, infoFailure))
-	}
+	infos, infoErrors := resolveProcessInfos(ctx, deps.Manager, ports)
+	applyProcessNames(ports, infos)
+	reportProcessInfoErrors(stderr, infoErrors)
 	var renderErr error
 	if asJSON {
 		renderErr = RenderJSONWithServices(stdout, ports, infos, service.Rules{})
@@ -453,24 +438,9 @@ func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON
 			filtered = append(filtered, record)
 		}
 	}
-	infos := make(map[int]model.ProcessInfo, len(filtered))
-	var infoFailure error
-	infoFailures := 0
-	for i := range filtered {
-		info, infoErr := deps.Manager.Info(ctx, filtered[i].PID)
-		if infoErr != nil {
-			infoFailures++
-			if infoFailure == nil {
-				infoFailure = infoErr
-			}
-			continue
-		}
-		infos[filtered[i].PID] = info
-		filtered[i].ProcessName = info.Name
-	}
-	if infoFailure != nil {
-		PrintError(stderr, fmt.Errorf("process information unavailable for %d record(s): %w", infoFailures, infoFailure))
-	}
+	infos, infoErrors := resolveProcessInfos(ctx, deps.Manager, filtered)
+	applyProcessNames(filtered, infos)
+	reportProcessInfoErrors(stderr, infoErrors)
 	if asJSON {
 		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
 			PrintError(stderr, err)
@@ -501,24 +471,9 @@ func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON 
 			filtered = append(filtered, record)
 		}
 	}
-	infos := make(map[int]model.ProcessInfo, len(filtered))
-	var infoFailure error
-	infoFailures := 0
-	for i := range filtered {
-		info, infoErr := deps.Manager.Info(ctx, filtered[i].PID)
-		if infoErr != nil {
-			infoFailures++
-			if infoFailure == nil {
-				infoFailure = infoErr
-			}
-			continue
-		}
-		infos[filtered[i].PID] = info
-		filtered[i].ProcessName = info.Name
-	}
-	if infoFailure != nil {
-		PrintError(stderr, fmt.Errorf("process information unavailable for %d record(s): %w", infoFailures, infoFailure))
-	}
+	infos, infoErrors := resolveProcessInfos(ctx, deps.Manager, filtered)
+	applyProcessNames(filtered, infos)
+	reportProcessInfoErrors(stderr, infoErrors)
 	if asJSON {
 		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
 			PrintError(stderr, err)
@@ -531,4 +486,44 @@ func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON 
 		return ExitCode(err)
 	}
 	return ExitSuccess
+}
+
+func resolveProcessInfos(ctx context.Context, manager ProcessManager, records []model.PortInfo) (map[int]model.ProcessInfo, map[int]error) {
+	infos := make(map[int]model.ProcessInfo, len(records))
+	errorsByPID := make(map[int]error)
+	for _, record := range records {
+		if _, known := infos[record.PID]; known {
+			continue
+		}
+		if _, known := errorsByPID[record.PID]; known {
+			continue
+		}
+		info, err := manager.Info(ctx, record.PID)
+		if err != nil {
+			errorsByPID[record.PID] = err
+			continue
+		}
+		infos[record.PID] = info
+	}
+	return infos, errorsByPID
+}
+
+func applyProcessNames(records []model.PortInfo, infos map[int]model.ProcessInfo) {
+	for i := range records {
+		if info, ok := infos[records[i].PID]; ok {
+			records[i].ProcessName = info.Name
+		}
+	}
+}
+
+func reportProcessInfoErrors(stderr io.Writer, errorsByPID map[int]error) {
+	if len(errorsByPID) == 0 {
+		return
+	}
+	var first error
+	for _, err := range errorsByPID {
+		first = err
+		break
+	}
+	PrintError(stderr, fmt.Errorf("process information unavailable for %d PID(s): %w", len(errorsByPID), first))
 }
