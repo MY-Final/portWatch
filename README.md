@@ -139,7 +139,7 @@ TUI 默认只显示 TCP `LISTENING` 端口，适合先解决“端口被谁占�
 
 ```text
 portwatch tui
-  Up/Down 选择端口
+  Up/Down 选择端口（方向键异常时，u 上移、j 下移）
   Enter   查看详情
   K       打开终止确认
   Enter   确认，Esc 取消
