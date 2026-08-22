@@ -23,6 +23,16 @@ const (
 	tcpTableOwnerPIDAll     = 5
 	udpTableOwnerPIDAll     = 1
 	tcpStateListen          = 2
+	tcpStateSynSent         = 3
+	tcpStateSynReceived     = 4
+	tcpStateEstablished     = 5
+	tcpStateFinWait1        = 6
+	tcpStateFinWait2        = 7
+	tcpStateCloseWait       = 8
+	tcpStateClosing         = 9
+	tcpStateLastAck         = 10
+	tcpStateTimeWait        = 11
+	tcpStateDeleteTCB       = 12
 	errorInsufficientBuffer = 122
 	afINET                  = 2
 	afINET6                 = 23
@@ -50,6 +60,7 @@ func NewScanner() Scanner                { return NewWindowsScanner() }
 
 var _ Scanner = (*WindowsScanner)(nil)
 var _ ProtocolScanner = (*WindowsScanner)(nil)
+var _ ScopedScanner = (*WindowsScanner)(nil)
 
 // List returns all IPv4 and IPv6 TCP listeners.
 func (s *WindowsScanner) List(ctx context.Context) ([]model.PortInfo, error) {
@@ -67,6 +78,38 @@ func (s *WindowsScanner) List(ctx context.Context) ([]model.PortInfo, error) {
 	rows := append(v4, v6...)
 	sortPortInfo(rows)
 	return rows, nil
+}
+
+// ListScope returns the TCP records needed by the interactive TUI. The
+// default List method intentionally remains the listener-only CLI contract.
+func (s *WindowsScanner) ListScope(ctx context.Context, scope Scope) ([]model.PortInfo, error) {
+	switch scope {
+	case ScopeListening:
+		return s.List(ctx)
+	case ScopeConnections, ScopeAll:
+		v4, err := getTCPTableAll(ctx, afINET)
+		if err != nil {
+			return nil, err
+		}
+		v6, err := getTCPTableAll(ctx, afINET6)
+		if err != nil {
+			return nil, err
+		}
+		rows := append(v4, v6...)
+		if scope == ScopeConnections {
+			filtered := rows[:0]
+			for _, row := range rows {
+				if row.State != "LISTENING" {
+					filtered = append(filtered, row)
+				}
+			}
+			rows = filtered
+		}
+		sortPortInfo(rows)
+		return rows, nil
+	default:
+		return nil, ErrScopeUnsupported
+	}
 }
 
 // Port returns all listeners on number.
@@ -145,6 +188,14 @@ func (s *WindowsScanner) listUDP(ctx context.Context) ([]model.PortInfo, error) 
 }
 
 func getTCPTable(ctx context.Context, family uint32) ([]model.PortInfo, error) {
+	return getTCPTableMode(ctx, family, true)
+}
+
+func getTCPTableAll(ctx context.Context, family uint32) ([]model.PortInfo, error) {
+	return getTCPTableMode(ctx, family, false)
+}
+
+func getTCPTableMode(ctx context.Context, family uint32, listenersOnly bool) ([]model.PortInfo, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -168,9 +219,9 @@ func getTCPTable(ctx context.Context, family uint32) ([]model.PortInfo, error) {
 		return nil, tcpTableError(status, callErr)
 	}
 	if family == afINET {
-		return parseTCPv4Table(buf)
+		return parseTCPv4TableMode(buf, listenersOnly)
 	}
-	return parseTCPv6Table(buf)
+	return parseTCPv6TableMode(buf, listenersOnly)
 }
 
 func getUDPTable(ctx context.Context, family uint32) ([]model.PortInfo, error) {
@@ -260,8 +311,13 @@ func parseUDPTable(data []byte, rowSize int, parse func([]byte) (model.PortInfo,
 }
 
 func parseTCPv4Table(data []byte) ([]model.PortInfo, error) {
+	return parseTCPv4TableMode(data, true)
+}
+
+func parseTCPv4TableMode(data []byte, listenersOnly bool) ([]model.PortInfo, error) {
 	return parseTCPTable(data, v4RowSize, func(row []byte) (model.PortInfo, bool) {
-		if binary.LittleEndian.Uint32(row[0:4]) != tcpStateListen {
+		state := tcpStateName(binary.LittleEndian.Uint32(row[0:4]))
+		if state == "" || (listenersOnly && state != "LISTENING") {
 			return model.PortInfo{}, false
 		}
 		return model.PortInfo{
@@ -269,15 +325,20 @@ func parseTCPv4Table(data []byte) ([]model.PortInfo, error) {
 			Protocol:   "TCP",
 			LocalAddr:  net.IP(row[4:8]).String(),
 			RemoteAddr: net.IP(row[12:16]).String(),
-			State:      "LISTENING",
+			State:      state,
 			PID:        int(binary.LittleEndian.Uint32(row[20:24])),
 		}, true
 	})
 }
 
 func parseTCPv6Table(data []byte) ([]model.PortInfo, error) {
+	return parseTCPv6TableMode(data, true)
+}
+
+func parseTCPv6TableMode(data []byte, listenersOnly bool) ([]model.PortInfo, error) {
 	return parseTCPTable(data, v6RowSize, func(row []byte) (model.PortInfo, bool) {
-		if binary.LittleEndian.Uint32(row[48:52]) != tcpStateListen {
+		state := tcpStateName(binary.LittleEndian.Uint32(row[48:52]))
+		if state == "" || (listenersOnly && state != "LISTENING") {
 			return model.PortInfo{}, false
 		}
 		return model.PortInfo{
@@ -285,10 +346,39 @@ func parseTCPv6Table(data []byte) ([]model.PortInfo, error) {
 			Protocol:   "TCP",
 			LocalAddr:  net.IP(row[0:16]).String(),
 			RemoteAddr: net.IP(row[24:40]).String(),
-			State:      "LISTENING",
+			State:      state,
 			PID:        int(binary.LittleEndian.Uint32(row[52:56])),
 		}, true
 	})
+}
+
+func tcpStateName(value uint32) string {
+	switch value {
+	case tcpStateListen:
+		return "LISTENING"
+	case tcpStateSynSent:
+		return "SYN_SENT"
+	case tcpStateSynReceived:
+		return "SYN_RECEIVED"
+	case tcpStateEstablished:
+		return "ESTABLISHED"
+	case tcpStateFinWait1:
+		return "FIN_WAIT_1"
+	case tcpStateFinWait2:
+		return "FIN_WAIT_2"
+	case tcpStateCloseWait:
+		return "CLOSE_WAIT"
+	case tcpStateClosing:
+		return "CLOSING"
+	case tcpStateLastAck:
+		return "LAST_ACK"
+	case tcpStateTimeWait:
+		return "TIME_WAIT"
+	case tcpStateDeleteTCB:
+		return "DELETE_TCB"
+	default:
+		return ""
+	}
 }
 
 func parseTCPTable(data []byte, rowSize int, parse func([]byte) (model.PortInfo, bool)) ([]model.PortInfo, error) {

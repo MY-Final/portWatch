@@ -3,7 +3,7 @@
 PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以查询 TCP
 监听端口对应的 PID、进程名、命令行和可执行文件路径，也可以在确认后终止占用端口的进程。
 
-当前版本：`v0.3.0`
+当前版本：`v0.5.0`
 
 ## 当前支持
 
@@ -22,7 +22,7 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 - 按进程、PID 或状态筛选：`portwatch --process node`、`portwatch --pid 1234`、`portwatch --state LISTENING`
 - 查看 PID 详情及其端口：`portwatch info 1234`
 - JSON 查看 PID 详情：`portwatch --json info 1234`
-- 交互式终端界面：`portwatch tui`
+- 交互式终端界面：`portwatch tui`、聚焦端口：`portwatch tui 8080`
 - `--help`、`--version` 和 `--protocol tcp|udp|all`
 
 `free` 会先显示进程详情并要求输入 `y` 或 `yes`，终止后重新扫描端口；直接回车或输入其他内容都会取消操作。
@@ -107,6 +107,9 @@ portwatch --json info 1234
 # 启动交互式终端界面
 portwatch tui
 
+# 只关注一个端口
+portwatch tui 8080
+
 # 终止指定 PID（会要求确认）
 portwatch kill 1234
 
@@ -130,6 +133,23 @@ JSON 响应顶层包含 `schema_version`。当前版本为 `"2"`，端口结果�
 `--json info <pid>` 使用独立的进程详情 schema（当前为 `"1"`），返回
 `process` 对象及其 `ports` 数组；它不会改变端口响应的 schema `"2"`。
 
+### TUI 快速用法
+
+TUI 默认只显示 TCP `LISTENING` 端口，适合先解决“端口被谁占用”。最短操作路径是：
+
+```text
+portwatch tui
+  Up/Down 选择端口
+  Enter   查看详情
+  K       打开终止确认
+  Enter   确认，Esc 取消
+```
+
+常用辅助操作：`/` 按端口、PID 或进程名过滤，`R` 刷新，`V` 选择
+Listening/Connections/All，`?` 查看完整帮助，`Q` 退出。终止后 PortWatch
+会验证 PID 已退出并检查端口是否释放。遇到 `Access denied` 时请用管理员权限
+重新打开 PowerShell。
+
 ### 退出码
 
 脚本可以依赖以下稳定退出码：
@@ -151,7 +171,7 @@ Windows 使用 IP Helper API 扫描 IPv4/IPv6 TCP 监听端口，并通过 Windo
 进程 API 和 WMI 获取进程详情。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
 这两个平台的实现已包含在代码中，但建议在目标系统上单独验证权限和命令可用性。
 
-Windows CLI 支持 TCP 监听端口和 UDP 绑定端口，`--protocol` 可选 `tcp`、`udp` 或 `all`；Linux/macOS 当前只实现 TCP，使用 UDP 时会返回明确的不支持错误。TUI 可以通过 `portwatch tui` 显式启动；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
+Windows CLI 支持 TCP 监听端口和 UDP 绑定端口，`--protocol` 可选 `tcp`、`udp` 或 `all`；Linux/macOS 当前只实现 TCP，使用 UDP 时会返回明确的不支持错误。TUI 可以通过 `portwatch tui` 或 `portwatch tui 8080` 显式启动，并默认进入 TCP `LISTENING` 视图；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
 
 ## 开发
 
@@ -175,3 +195,4 @@ $env:GOOS = "darwin";  $env:GOARCH = "arm64"; go build ./cmd/portwatch
 
 开发任务和后续阶段见 [`task/README.md`](task/README.md) 与 [`task/INDEX.md`](task/INDEX.md)。
 V4 产品范围、退出码、安全边界和后续任务拆分见 [`prd/v4.md`](prd/v4.md)。
+下一轮 TUI 的端口诊断工作流和交互边界见 [`prd/v6-guided-tui.md`](prd/v6-guided-tui.md)。

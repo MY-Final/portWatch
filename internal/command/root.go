@@ -56,8 +56,8 @@ const (
 	ActionVersion
 )
 
-// Command is the parsed root command. Port is set for ActionPort and
-// ActionFree; ActionList represents an invocation with no arguments.
+// Command is the parsed root command. Port is set for port-oriented actions,
+// including an optional port passed to the TUI.
 type Command struct {
 	Action  Action
 	Port    int
@@ -134,6 +134,13 @@ func Parse(args []string) (Command, error) {
 		}
 		return Command{Action: ActionPort, Port: port, Flags: options}, nil
 	case 2:
+		if positional[0] == "tui" {
+			port, err := strconv.Atoi(positional[1])
+			if err != nil || port < 1 || port > 65535 {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: positional[1], Message: "port must be a number from 1 to 65535"}
+			}
+			return Command{Action: ActionTUI, Port: port, Flags: options}, nil
+		}
 		if positional[0] == "watch" {
 			port, err := strconv.Atoi(positional[1])
 			if err != nil || port < 1 || port > 65535 {
@@ -210,7 +217,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	if err != nil {
 		var parseErr *ParseError
 		if errors.As(err, &parseErr) {
-			_, _ = fmt.Fprintf(stderr, "portwatch: %s\nusage: portwatch [port]\n", parseErr)
+			_, _ = fmt.Fprintf(stderr, "portwatch: %s\nusage: portwatch [flags] [port]\n       portwatch tui [port]\n", parseErr)
 		} else {
 			_, _ = fmt.Fprintf(stderr, "portwatch: %s\n", err)
 		}
@@ -225,7 +232,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		_, _ = fmt.Fprintln(stdout, "       portwatch find <name>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch <start-end>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch watch")
-		_, _ = fmt.Fprintln(stdout, "       portwatch tui")
+		_, _ = fmt.Fprintln(stdout, "       portwatch tui [port]")
 		_, _ = fmt.Fprintln(stdout, "Flags: --json --ports <p1,p2> --pid <p1,p2> --process <name> --state <state> --interval <duration> --protocol tcp")
 		return ExitSuccess
 	}
@@ -241,6 +248,11 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	}
 	if !queryFilter.Empty() && !filtersAllowed(command.Action) {
 		parseErr := &ParseError{Kind: ParseErrorInvalidFilter, Message: "query filters are only supported for port queries and watch"}
+		PrintError(stderr, parseErr)
+		return ExitCode(parseErr)
+	}
+	if command.Action == ActionTUI && command.Flags.Protocol != "tcp" {
+		parseErr := &ParseError{Kind: ParseErrorInvalidFilter, Message: "tui currently supports TCP listening ports only"}
 		PrintError(stderr, parseErr)
 		return ExitCode(parseErr)
 	}
@@ -322,7 +334,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		}
 		return ExitCode(err)
 	case ActionTUI:
-		err := tui.Run(ctx, deps.Scanner, deps.Manager)
+		err := tui.RunPort(ctx, deps.Scanner, deps.Manager, command.Port)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			PrintError(stderr, err)
 		}

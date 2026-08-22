@@ -10,7 +10,7 @@ import (
 )
 
 // Version is overridden by the release build through main.version.
-var Version = "0.3.0"
+var Version = "0.5.0"
 
 type flagOptions struct {
 	Protocol   string

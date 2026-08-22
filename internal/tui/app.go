@@ -2,11 +2,13 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -15,30 +17,66 @@ import (
 	"github.com/portwatch/portwatch/pkg/model"
 )
 
+// Model is the Bubble Tea state for the developer-facing port manager.
+// Detail and ConfirmKill remain as compatibility fields for callers that used
+// the original TUI model; Page is the authoritative view state.
 type Model struct {
-	Context     context.Context
-	Scanner     port.Scanner
-	Manager     process.Manager
-	Ports       []model.PortInfo
-	Infos       map[int]model.ProcessInfo
-	Filter      string
-	Filtering   bool
-	Width       int
-	Err         error
-	Selected    int
-	Detail      string
-	ConfirmKill bool
+	Context context.Context
+	Scanner port.Scanner
+	Manager process.Manager
+	Version string
+
+	Scope         port.Scope
+	ViewSelection port.Scope
+	Page          pageMode
+	Ports         []model.PortInfo
+	Infos         map[int]model.ProcessInfo
+	LookupErrors  map[int]error
+	Filter        string
+	PortFilter    int
+	Filtering     bool
+	Width         int
+	Height        int
+	Err           error
+	Status        string
+	NextStatus    string
+	UpdatedAt     time.Time
+	Selected      int
+	SelectedKey   rowKey
+	DetailRecord  model.PortInfo
+	Detail        string
+	ConfirmKill   bool
+	ConfirmReturn pageMode
+	HelpReturn    pageMode
 }
 
 type portsLoadedMsg struct {
-	ports []model.PortInfo
-	infos map[int]model.ProcessInfo
+	ports        []model.PortInfo
+	infos        map[int]model.ProcessInfo
+	lookupErrors map[int]error
+	scope        port.Scope
+	updatedAt    time.Time
 }
 type portsFailedMsg struct{ err error }
 type killDoneMsg struct{ err error }
 
 func New(scanner port.Scanner, manager process.Manager) Model {
-	return Model{Context: context.Background(), Scanner: scanner, Manager: manager}
+	return NewWithPort(scanner, manager, 0)
+}
+
+// NewWithPort creates a TUI model optionally focused on one port. The port
+// filter is applied locally so the scanner contract remains unchanged.
+func NewWithPort(scanner port.Scanner, manager process.Manager, portFilter int) Model {
+	return Model{
+		Context:       context.Background(),
+		Scanner:       scanner,
+		Manager:       manager,
+		Version:       "0.5.0",
+		Scope:         port.ScopeListening,
+		ViewSelection: port.ScopeListening,
+		Page:          pageList,
+		PortFilter:    portFilter,
+	}
 }
 
 func (m Model) Init() tea.Cmd { return m.refresh() }
@@ -49,7 +87,24 @@ func (m Model) refresh() tea.Cmd {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		ports, err := m.Scanner.List(ctx)
+		scope := m.Scope
+		if scope > port.ScopeAll {
+			scope = port.ScopeListening
+		}
+		var (
+			ports []model.PortInfo
+			err   error
+		)
+		if scoped, ok := m.Scanner.(port.ScopedScanner); ok {
+			ports, err = scoped.ListScope(ctx, scope)
+		} else if scope == port.ScopeListening {
+			if m.Scanner == nil {
+				return portsFailedMsg{err: errors.New("port scanner is nil")}
+			}
+			ports, err = m.Scanner.List(ctx)
+		} else {
+			return portsFailedMsg{err: unsupportedScopeError(scope)}
+		}
 		if err != nil {
 			return portsFailedMsg{err: err}
 		}
@@ -74,7 +129,10 @@ func (m Model) refresh() tea.Cmd {
 			infos[ports[i].PID] = info
 			ports[i].ProcessName = info.Name
 		}
-		return portsLoadedMsg{ports: ports, infos: infos}
+		return portsLoadedMsg{
+			ports: ports, infos: infos, lookupErrors: infoErrors,
+			scope: scope, updatedAt: time.Now(),
+		}
 	}
 }
 
@@ -83,69 +141,241 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(value)
 	case tea.WindowSizeMsg:
-		m.Width = value.Width
+		m.Width, m.Height = value.Width, value.Height
 	case portsLoadedMsg:
-		m.Ports, m.Infos, m.Err = value.ports, value.infos, nil
-		if m.Selected >= len(m.Ports) {
-			m.Selected = len(m.Ports) - 1
-		}
-		if m.Selected < 0 {
-			m.Selected = 0
-		}
-		sort.Slice(m.Ports, func(i, j int) bool { return m.Ports[i].Port < m.Ports[j].Port })
+		previousKey := m.currentKey()
+		previousIndex := m.Selected
+		m.Ports = append([]model.PortInfo(nil), value.ports...)
+		m.Infos = value.infos
+		m.LookupErrors = value.lookupErrors
+		m.Scope = value.scope
+		m.UpdatedAt = value.updatedAt
+		m.Err = nil
+		m.Status = m.NextStatus
+		m.NextStatus = ""
+		sortPorts(m.Ports)
+		m.Selected = restoreSelection(m.Ports, previousKey, previousIndex)
+		m.SelectedKey = m.currentKey()
+		m.Page = pageList
+		m.Detail = ""
+		m.ConfirmKill = false
 	case portsFailedMsg:
+		m.NextStatus = ""
 		m.Err = value.err
+		m.Status = fmt.Sprintf("Refresh failed: %v", value.err)
 	case killDoneMsg:
 		if value.err != nil {
-			m.Err = value.err
 			m.ConfirmKill = false
+			m.Page = m.ConfirmReturn
+			m.Err = value.err
+			m.Status = fmt.Sprintf("Kill failed: %v", value.err)
 			return m, nil
 		}
-		m.Detail = "Process terminated."
+		m.Err = nil
+		m.ConfirmKill = false
+		m.Page = pageList
+		m.NextStatus = fmt.Sprintf("Process terminated. Port %d is available.", m.DetailRecord.Port)
+		m.Status = "Verifying PID and port release..."
 		return m, m.refresh()
 	}
 	return m, nil
 }
 
 func (m Model) View() string {
-	if m.Err != nil {
-		return fmt.Sprintf("PortWatch\n\nError: %v\n\nR refresh   Q quit\n", m.Err)
+	switch m.Page {
+	case pageDetails:
+		return m.viewDetails()
+	case pageConfirm:
+		return m.viewConfirm()
+	case pageHelp:
+		return m.viewHelp()
+	case pageView:
+		return m.viewViewMenu()
+	default:
+		return m.viewList()
 	}
+}
+
+func (m Model) viewList() string {
 	var b strings.Builder
-	b.WriteString("PortWatch\n\nPORT   PROTOCOL   PID      PROCESS\n")
+	m.writeHeader(&b)
+	if m.Err != nil && len(m.Ports) == 0 {
+		fmt.Fprintf(&b, "\nError: %s\n", cleanError(m.Err))
+	} else {
+		b.WriteString("\n")
+		m.writeTable(&b)
+	}
 	if m.Filtering {
-		fmt.Fprintf(&b, "Search: %s_\n", m.Filter)
-	} else if m.Filter != "" {
-		fmt.Fprintf(&b, "Filter: %s\n", m.Filter)
+		fmt.Fprintf(&b, "\nFilter: %s_\n", m.Filter)
+	} else {
+		fmt.Fprintf(&b, "\nFilter: %s\n", displayFilter(m.Filter))
 	}
-	if m.ConfirmKill {
-		b.WriteString("Kill selected process? Y/N\n")
+	if m.Status != "" {
+		fmt.Fprintf(&b, "Status: %s\n", m.Status)
 	}
-	if m.Detail != "" {
-		b.WriteString(m.Detail + "\n")
+	m.writeHelp(&b)
+	return b.String()
+}
+
+func (m Model) writeHeader(b *strings.Builder) {
+	b.WriteString("PortWatch")
+	if m.Version != "" {
+		fmt.Fprintf(b, "                                      v%s", m.Version)
 	}
-	for _, index := range m.visibleIndexes() {
+	b.WriteString("\nPort & Process Manager\n")
+	count := len(m.visibleIndexes())
+	updated := "not updated"
+	if !m.UpdatedAt.IsZero() {
+		updated = "Updated " + formatAge(m.UpdatedAt)
+	}
+	label := scopeLabel(m.Scope)
+	if m.PortFilter > 0 {
+		label = fmt.Sprintf("%s · PORT %d", label, m.PortFilter)
+	}
+	fmt.Fprintf(b, "\n%s · TCP                         %d results · %s\n", label, count, updated)
+}
+
+func (m Model) writeTable(b *strings.Builder) {
+	if m.Width >= 110 {
+		b.WriteString("PORT   PROTOCOL   STATE        PID      PROCESS\n")
+	} else {
+		b.WriteString("PORT   PROTOCOL   PID      PROCESS\n")
+	}
+	indexes := m.visibleIndexes()
+	for _, index := range indexes {
 		record := m.Ports[index]
 		marker := " "
 		if index == m.Selected {
 			marker = ">"
 		}
-		nameWidth := m.Width - 35
-		if nameWidth < 8 {
-			nameWidth = 8
+		name := m.processName(record)
+		if m.Width >= 110 {
+			nameWidth := m.Width - 43
+			if nameWidth < 12 {
+				nameWidth = 12
+			}
+			fmt.Fprintf(b, "%s%-5d %-10s %-12s %-8d %s\n", marker, record.Port, display(record.Protocol), display(record.State), record.PID, fitText(name, nameWidth))
+			continue
 		}
-		fmt.Fprintf(&b, "%s%-5d %-10s %-8d %s\n", marker, record.Port, record.Protocol, record.PID, fitText(displayProcessName(record.ProcessName), nameWidth))
+		nameWidth := m.Width - 32
+		if nameWidth < 12 {
+			nameWidth = 12
+		}
+		fmt.Fprintf(b, "%s%-5d %-10s %-8d %s\n", marker, record.Port, display(record.Protocol), record.PID, fitText(name, nameWidth))
 	}
-	b.WriteString("\nR refresh   / filter   Q quit\n")
+	if len(indexes) == 0 {
+		switch {
+		case strings.TrimSpace(m.Filter) != "":
+			fmt.Fprintf(b, "No match for %q.\n", m.Filter)
+		case m.PortFilter > 0:
+			fmt.Fprintf(b, "Port %d is available.\n", m.PortFilter)
+		default:
+			b.WriteString("No listening ports found.\n")
+		}
+	}
+}
+
+func (m Model) viewDetails() string {
+	var b strings.Builder
+	m.writeHeader(&b)
+	b.WriteString("\nProcess Details\n")
+	record := m.DetailRecord
+	info := m.Infos[record.PID]
+	fields := [][2]string{
+		{"Port", fmt.Sprint(record.Port)},
+		{"Protocol", display(record.Protocol)},
+		{"State", display(record.State)},
+		{"Local Address", display(record.LocalAddr)},
+		{"Remote Address", display(record.RemoteAddr)},
+		{"PID", fmt.Sprint(record.PID)},
+		{"Process Name", m.processName(record)},
+		{"Executable Path", display(info.Executable)},
+		{"Command Line", display(info.Command)},
+		{"Working Directory", display(info.WorkingDir)},
+	}
+	for _, field := range fields {
+		fmt.Fprintf(&b, "%-20s %s\n", field[0], fitText(field[1], maxDetailWidth(m.Width)))
+	}
+	if err, ok := m.LookupErrors[record.PID]; ok {
+		fmt.Fprintf(&b, "\n%s\n", lookupMessage(classifyLookupError(err)))
+	}
+	if m.Status != "" {
+		fmt.Fprintf(&b, "\nStatus: %s\n", m.Status)
+	}
+	b.WriteString("\nEsc Back   K Kill   R Refresh   Q Quit\n")
 	return b.String()
+}
+
+func (m Model) viewConfirm() string {
+	var b strings.Builder
+	m.writeHeader(&b)
+	record := m.DetailRecord
+	fmt.Fprintf(&b, "\nTerminate process?\n\nPID      %d\nProcess  %s\nPort     %d\n", record.PID, m.processName(record), record.Port)
+	b.WriteString("\nThis will terminate the process.\n")
+	b.WriteString("\nEnter Confirm   Esc Cancel\n")
+	return b.String()
+}
+
+func (m Model) viewHelp() string {
+	var b strings.Builder
+	m.writeHeader(&b)
+	b.WriteString("\nHow to use PortWatch\n\n")
+	b.WriteString("1. Select a listening port with Up/Down.\n")
+	b.WriteString("2. Press Enter to inspect the process.\n")
+	b.WriteString("3. Press K, then Enter, to terminate after confirmation.\n")
+	b.WriteString("4. PortWatch verifies the PID and port release.\n\n")
+	b.WriteString("Keys\n")
+	b.WriteString("↑↓ Select   Enter Details   / Filter   K Kill\n")
+	b.WriteString("R Refresh   V Views   ? Help   Esc Back   Q Quit\n")
+	return b.String()
+}
+
+func (m Model) viewViewMenu() string {
+	var b strings.Builder
+	m.writeHeader(&b)
+	b.WriteString("\nChoose a view\n\n")
+	for _, option := range []struct {
+		key   string
+		label string
+		scope port.Scope
+	}{
+		{key: "L", label: "Listening ports", scope: port.ScopeListening},
+		{key: "C", label: "Active connections", scope: port.ScopeConnections},
+		{key: "A", label: "All TCP records", scope: port.ScopeAll},
+	} {
+		marker := " "
+		if option.scope == m.Scope {
+			marker = ">"
+		}
+		fmt.Fprintf(&b, "%s [%s] %s\n", marker, option.key, option.label)
+	}
+	b.WriteString("\nL/C/A Select   Esc Back\n")
+	return b.String()
+}
+
+func (m Model) processName(record model.PortInfo) string {
+	if info, ok := m.Infos[record.PID]; ok && strings.TrimSpace(info.Name) != "" {
+		return info.Name
+	}
+	if _, failed := m.LookupErrors[record.PID]; failed {
+		return "Unknown"
+	}
+	if strings.TrimSpace(record.ProcessName) != "" {
+		return record.ProcessName
+	}
+	return "Unknown"
 }
 
 func (m Model) visibleIndexes() []int {
 	indexes := make([]int, 0, len(m.Ports))
 	filter := strings.ToLower(strings.TrimSpace(m.Filter))
 	for index, record := range m.Ports {
+		if m.PortFilter > 0 && record.Port != m.PortFilter {
+			continue
+		}
+		name := strings.ToLower(m.processName(record))
 		if filter != "" &&
-			!strings.Contains(strings.ToLower(record.ProcessName), filter) &&
+			!strings.Contains(name, filter) &&
 			!strings.Contains(strconv.Itoa(record.Port), filter) &&
 			!strings.Contains(strconv.Itoa(record.PID), filter) {
 			continue
@@ -155,11 +385,80 @@ func (m Model) visibleIndexes() []int {
 	return indexes
 }
 
-func displayProcessName(name string) string {
-	if name == "" {
+func (m Model) currentKey() rowKey {
+	if m.Selected >= 0 && m.Selected < len(m.Ports) {
+		return keyOf(m.Ports[m.Selected])
+	}
+	return m.SelectedKey
+}
+
+func sortPorts(ports []model.PortInfo) {
+	sort.SliceStable(ports, func(i, j int) bool {
+		if ports[i].Port != ports[j].Port {
+			return ports[i].Port < ports[j].Port
+		}
+		if ports[i].Protocol != ports[j].Protocol {
+			return ports[i].Protocol < ports[j].Protocol
+		}
+		if ports[i].PID != ports[j].PID {
+			return ports[i].PID < ports[j].PID
+		}
+		if ports[i].LocalAddr != ports[j].LocalAddr {
+			return ports[i].LocalAddr < ports[j].LocalAddr
+		}
+		return ports[i].RemoteAddr < ports[j].RemoteAddr
+	})
+}
+
+func restoreSelection(ports []model.PortInfo, previous rowKey, previousIndex int) int {
+	for index, record := range ports {
+		if keyOf(record) == previous && previous != (rowKey{}) {
+			return index
+		}
+	}
+	if len(ports) == 0 {
+		return 0
+	}
+	if previousIndex < 0 {
+		return 0
+	}
+	if previousIndex >= len(ports) {
+		return len(ports) - 1
+	}
+	return previousIndex
+}
+
+func formatAge(updated time.Time) string {
+	seconds := int(time.Since(updated).Seconds())
+	if seconds < 0 {
+		seconds = 0
+	}
+	return fmt.Sprintf("%ds ago", seconds)
+}
+
+func displayFilter(filter string) string {
+	if strings.TrimSpace(filter) == "" {
 		return "-"
 	}
-	return name
+	return filter
+}
+
+func maxDetailWidth(width int) int {
+	if width <= 0 {
+		return 58
+	}
+	available := width - 22
+	if available < 16 {
+		return 16
+	}
+	return available
+}
+
+func cleanError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(err.Error()), " ")
 }
 
 func fitText(value string, width int) string {
@@ -173,12 +472,28 @@ func fitText(value string, width int) string {
 	return string(runes[:width-3]) + "..."
 }
 
+func display(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "Unknown"
+	}
+	return value
+}
+
 func Run(ctx context.Context, scanner port.Scanner, manager process.Manager) error {
-	return runProgram(ctx, scanner, manager, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
+	return RunPort(ctx, scanner, manager, 0)
+}
+
+// RunPort starts the TUI, optionally focused on one listening port.
+func RunPort(ctx context.Context, scanner port.Scanner, manager process.Manager, portFilter int) error {
+	return runProgramWithPort(ctx, scanner, manager, portFilter, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
 }
 
 func runProgram(ctx context.Context, scanner port.Scanner, manager process.Manager, options ...tea.ProgramOption) error {
-	model := New(scanner, manager)
+	return runProgramWithPort(ctx, scanner, manager, 0, options...)
+}
+
+func runProgramWithPort(ctx context.Context, scanner port.Scanner, manager process.Manager, portFilter int, options ...tea.ProgramOption) error {
+	model := NewWithPort(scanner, manager, portFilter)
 	model.Context = ctx
 	programOptions := append([]tea.ProgramOption{tea.WithContext(ctx)}, options...)
 	program := tea.NewProgram(model, programOptions...)

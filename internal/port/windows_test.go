@@ -27,6 +27,28 @@ func TestParseTCPv4TableFiltersAndSorts(t *testing.T) {
 	}
 }
 
+func TestParseTCPv4TableModePreservesConnectionStates(t *testing.T) {
+	data := make([]byte, 4+3*v4RowSize)
+	binary.LittleEndian.PutUint32(data, 3)
+	putV4Row(data[4:], tcpStateEstablished, 8080, "127.0.0.1", "127.0.0.1", 22)
+	putV4Row(data[4+v4RowSize:], tcpStateListen, 3000, "0.0.0.0", "0.0.0.0", 11)
+	putV4Row(data[4+2*v4RowSize:], tcpStateTimeWait, 9000, "10.0.0.2", "10.0.0.3", 33)
+	rows, err := parseTCPv4TableMode(data, false)
+	if err != nil {
+		t.Fatalf("parseTCPv4TableMode() error = %v", err)
+	}
+	if len(rows) != 3 || rows[0].State != "LISTENING" || rows[1].State != "ESTABLISHED" || rows[2].State != "TIME_WAIT" {
+		t.Fatalf("rows = %+v, want all known states in port order", rows)
+	}
+	listeners, err := parseTCPv4TableMode(data, true)
+	if err != nil {
+		t.Fatalf("parseTCPv4TableMode(listeners) error = %v", err)
+	}
+	if len(listeners) != 1 || listeners[0].Port != 3000 {
+		t.Fatalf("listeners = %+v, want only LISTENING row", listeners)
+	}
+}
+
 func TestParseTCPv6Table(t *testing.T) {
 	data := make([]byte, 4+v6RowSize)
 	binary.LittleEndian.PutUint32(data, 1)

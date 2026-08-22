@@ -79,7 +79,7 @@ func TestRunReturnsExitCodeWithoutExit(t *testing.T) {
 	if code := Run(context.Background(), []string{"not-a-port"}, Dependencies{}, nil, &stderr); code != 2 {
 		t.Fatalf("Run() code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: portwatch [port]") {
+	if !strings.Contains(stderr.String(), "usage: portwatch [flags] [port]") || !strings.Contains(stderr.String(), "portwatch tui [port]") {
 		t.Fatalf("stderr = %q, want usage", stderr.String())
 	}
 	deps := Dependencies{
@@ -108,6 +108,29 @@ func TestParseTUICommand(t *testing.T) {
 	}
 	if got.Action != ActionTUI {
 		t.Fatalf("Parse(tui) action = %v, want ActionTUI", got.Action)
+	}
+	focused, err := Parse([]string{"tui", "8080"})
+	if err != nil {
+		t.Fatalf("Parse(tui 8080) error = %v", err)
+	}
+	if focused.Action != ActionTUI || focused.Port != 8080 {
+		t.Fatalf("Parse(tui 8080) = %#v, want ActionTUI port 8080", focused)
+	}
+	for _, value := range []string{"0", "65536", "http"} {
+		if _, err := Parse([]string{"tui", value}); err == nil {
+			t.Errorf("Parse(tui %s) error = nil", value)
+		}
+	}
+}
+
+func TestRunRejectsNonTCPTUI(t *testing.T) {
+	var stderr strings.Builder
+	deps := Dependencies{Scanner: fakeRootScanner{}, Manager: fakeRootManager{}}
+	if code := Run(context.Background(), []string{"--protocol", "udp", "tui"}, deps, nil, &stderr); code != 2 {
+		t.Fatalf("Run(udp tui) code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "TCP listening ports only") {
+		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
 

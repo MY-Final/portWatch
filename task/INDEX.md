@@ -83,6 +83,12 @@ V4 的产品范围、JSON 合同、退出码、安全边界和建议任务拆分
 
 | 范围 | 状态 | 文档 |
 | --- | --- | --- |
-| TUI-Polish-001 至 010 | proposed | [`phase-05-tui-polish/README.md`](phase-05-tui-polish/README.md) |
+| TUI-Polish-001 至 010 | superseded by V6 | [`phase-05-tui-polish/README.md`](phase-05-tui-polish/README.md) |
 
-产品定义见 [`../prd/v5-tui-polish.md`](../prd/v5-tui-polish.md)。本阶段尚未实现，必须先按任务依赖进行拆分和 review。
+产品定义见 [`../prd/v5-tui-polish.md`](../prd/v5-tui-polish.md)。该提案已归档，后续以 V6 Guided TUI 产品定义为准。
+
+## V6 Guided TUI Implementation
+
+V6 将 TUI 从“端口表”收敛为端口诊断工作流：默认 Listening、可选端口聚焦、独立详情和确认页、Kill 后验证，以及通过 View 菜单进入 Connections/All。
+
+产品定义见 [`../prd/v6-guided-tui.md`](../prd/v6-guided-tui.md)。当前实现已覆盖命令入口、核心页面状态、Windows Scope 扫描、测试和文档；后续只添加 V6 PRD 明确的验收修正，不继续恢复 V5 首屏快捷键堆叠。

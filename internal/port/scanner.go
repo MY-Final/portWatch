@@ -18,6 +18,35 @@ var ErrUnsupported = errors.New("port scanning is unsupported")
 // regardless of which package performed the validation.
 var ErrInvalidPort = model.ErrInvalidPort
 
+// Scope identifies the records requested by an interactive view.
+type Scope uint8
+
+const (
+	ScopeListening Scope = iota
+	ScopeConnections
+	ScopeAll
+)
+
+func (s Scope) String() string {
+	switch s {
+	case ScopeListening:
+		return "LISTENING"
+	case ScopeConnections:
+		return "CONNECTIONS"
+	case ScopeAll:
+		return "ALL"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// ScopedScanner is an optional extension used by TUI views. Scanner.List
+// remains the stable default listener query for CLI callers.
+type ScopedScanner interface {
+	Scanner
+	ListScope(context.Context, Scope) ([]model.PortInfo, error)
+}
+
 // Scanner discovers listening port records.
 //
 // Port returns every listening record matching number. Implementations return

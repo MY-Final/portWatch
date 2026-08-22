@@ -8,6 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/portwatch/portwatch/internal/port"
+	"github.com/portwatch/portwatch/internal/process"
 	"github.com/portwatch/portwatch/pkg/model"
 )
 
@@ -175,5 +177,102 @@ func TestModelDoesNotActWhenFilterHasNoMatches(t *testing.T) {
 	updated, command = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	if updated.(Model).ConfirmKill || command != nil {
 		t.Fatalf("kill acted on hidden row: model=%+v command=%v", updated, command)
+	}
+}
+
+func TestV6ListExplainsPrimaryWorkflow(t *testing.T) {
+	m := NewWithPort(nil, nil, 8080)
+	m.Width = 100
+	m.Ports = []model.PortInfo{
+		{Port: 3000, Protocol: "TCP", State: "LISTENING", PID: 11, ProcessName: "node.exe"},
+		{Port: 8080, Protocol: "TCP", State: "LISTENING", PID: 22, ProcessName: "java.exe"},
+	}
+	m.Selected = 1
+	view := m.View()
+	for _, want := range []string{"PortWatch", "LISTENING", "PORT 8080", ">", "java.exe", "Enter Details", "? Help"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("View() missing %q: %s", want, view)
+		}
+	}
+	if strings.Contains(view, "Connections") || strings.Contains(view, "All") {
+		t.Fatalf("list view exposes advanced modes: %s", view)
+	}
+}
+
+func TestV6DetailsAndConfirmAreSeparatePages(t *testing.T) {
+	m := Model{Ports: []model.PortInfo{{Port: 8080, Protocol: "TCP", State: "LISTENING", PID: 42, ProcessName: "demo.exe"}}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.Page != pageDetails || !strings.Contains(m.View(), "Process Details") || strings.Contains(m.View(), "Terminate process?") {
+		t.Fatalf("details page = page=%d view=%q", m.Page, m.View())
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m = updated.(Model)
+	if m.Page != pageConfirm || !strings.Contains(m.View(), "Terminate process?") || !strings.Contains(m.View(), "PID      42") {
+		t.Fatalf("confirm page = page=%d view=%q", m.Page, m.View())
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.Page != pageDetails {
+		t.Fatalf("cancel returned to page %d, want details", m.Page)
+	}
+}
+
+func TestV6HelpAndViewMenu(t *testing.T) {
+	m := Model{Scope: port.ScopeListening, Page: pageList}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	m = updated.(Model)
+	if m.Page != pageHelp || !strings.Contains(m.View(), "How to use PortWatch") {
+		t.Fatalf("help page = page=%d view=%q", m.Page, m.View())
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	m = updated.(Model)
+	if m.Page != pageView || !strings.Contains(m.View(), "Choose a view") {
+		t.Fatalf("view menu = page=%d view=%q", m.Page, m.View())
+	}
+}
+
+func TestV6LookupFailureIsDisplayedAsUnknown(t *testing.T) {
+	m := Model{
+		Ports:        []model.PortInfo{{Port: 8080, PID: 42, ProcessName: "stale.exe"}},
+		LookupErrors: map[int]error{42: process.ErrAccessDenied},
+	}
+	if got := m.processName(m.Ports[0]); got != "Unknown" {
+		t.Fatalf("processName() = %q, want Unknown", got)
+	}
+	if !strings.Contains(m.View(), "Unknown") {
+		t.Fatalf("View() = %q, want Unknown", m.View())
+	}
+}
+
+func TestV6EmptyResultsExplainNextState(t *testing.T) {
+	focused := NewWithPort(nil, nil, 8080)
+	if !strings.Contains(focused.View(), "Port 8080 is available") {
+		t.Fatalf("focused empty view = %q", focused.View())
+	}
+	filtered := Model{Ports: []model.PortInfo{{Port: 8080}}, Filter: "missing"}
+	if !strings.Contains(filtered.View(), `No match for "missing"`) {
+		t.Fatalf("filtered empty view = %q", filtered.View())
+	}
+}
+
+func TestV6KillSuccessStatusSurvivesRefresh(t *testing.T) {
+	manager := &tuiTestManager{exists: false}
+	scanner := duplicatePIDScanner{}
+	m := Model{Scanner: scanner, Manager: manager, Ports: []model.PortInfo{{Port: 8080, Protocol: "TCP", PID: 42}}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	updated, command := updated.(Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if command == nil {
+		t.Fatal("confirm did not produce kill command")
+	}
+	updated, command = updated.(Model).Update(command())
+	if command == nil {
+		t.Fatal("successful kill did not schedule refresh")
+	}
+	updated, _ = updated.(Model).Update(command())
+	if !strings.Contains(updated.(Model).Status, "Process terminated") {
+		t.Fatalf("status = %q, want termination feedback", updated.(Model).Status)
 	}
 }
