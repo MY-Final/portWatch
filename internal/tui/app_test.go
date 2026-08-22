@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 
@@ -112,6 +113,19 @@ func TestRefreshUsesModelContext(t *testing.T) {
 	}
 	if scanner.seen != ctx {
 		t.Fatal("refresh did not use model context")
+	}
+}
+
+func TestRunProgramStartsAndExitsFromInput(t *testing.T) {
+	scanner := &tuiContextScanner{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := runProgram(ctx, scanner, nil,
+		tea.WithInput(strings.NewReader("q")),
+		tea.WithOutput(io.Discard),
+		tea.WithoutRenderer(),
+	); err != nil {
+		t.Fatalf("runProgram() error = %v", err)
 	}
 }
 

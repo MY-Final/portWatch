@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -164,9 +165,14 @@ func fitText(value string, width int) string {
 }
 
 func Run(ctx context.Context, scanner port.Scanner, manager process.Manager) error {
+	return runProgram(ctx, scanner, manager, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
+}
+
+func runProgram(ctx context.Context, scanner port.Scanner, manager process.Manager, options ...tea.ProgramOption) error {
 	model := New(scanner, manager)
 	model.Context = ctx
-	program := tea.NewProgram(model, tea.WithContext(ctx))
+	programOptions := append([]tea.ProgramOption{tea.WithContext(ctx)}, options...)
+	program := tea.NewProgram(model, programOptions...)
 	_, err := program.Run()
 	return err
 }
