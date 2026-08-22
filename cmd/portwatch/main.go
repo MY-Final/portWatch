@@ -10,11 +10,13 @@ import (
 	"github.com/portwatch/portwatch/internal/process"
 )
 
+var version = command.Version
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	deps := command.Dependencies{
-		Scanner: port.NewWindowsScanner(),
+		Scanner: port.NewScanner(),
 		Manager: process.NewManager(),
 	}
 	os.Exit(command.Run(ctx, os.Args[1:], deps, os.Stdout, os.Stderr))

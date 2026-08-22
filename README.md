@@ -41,3 +41,6 @@ planned for later phases.
 go test ./...
 go build ./...
 ```
+
+CI tests Windows, Linux, and macOS. Release artifacts are configured through
+GoReleaser for amd64 and arm64 on all three platforms.
