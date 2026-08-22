@@ -22,11 +22,11 @@
 | 005 | **done** | `005-windows-port-scanner.md` | `internal/port/windows.go` | 004 | Luna-005 | `cdcc92b` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 006 | **done** | `006-process-manager-interface.md` | `internal/process/manager.go` | 002 | Luna-006 | `12cda8d` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 007 | **done** | `007-windows-process-info.md` | `internal/process/windows.go` | 006 | Luna-007 | `930bc88` | `go test -mod=mod ./...`; `go build -mod=mod ./...`; `git diff --check` |
-| 008 | **running** | `008-kill-process.md` | `internal/process/windows.go` tests/termination additions | 006, 007 | Luna-008 | - | - |
-| 009 | pending | `009-free-port-command.md` | `internal/command/free.go` | 003, 004, 006, 007, 008 | - | - | - |
+| 008 | **done** | `008-kill-process.md` | `internal/process/windows.go` tests/termination additions | 006, 007 | Luna-008 | `1334bee` | `go test -v ./internal/process`; `go test ./...`; `go build ./...`; `git diff --check` |
+| 009 | **done** | `009-free-port-command.md` | `internal/command/free.go` | 003, 004, 006, 007, 008 | Main Agent | `20956bc` | `go test ./...`; `go build ./...`; `git diff --check` |
 | 010 | **done** | `010-output-table.md` | `internal/command/output.go` | 002, 003 | Luna-010 | `fa50537` | `go test ./...`; `go build ./...`; `git diff --check` |
-| 011 | **running** | `011-error-handling.md` | `internal/command/errors.go` | 003, 004, 006 | Luna-011 | - | - |
-| 012 | pending | `012-unit-tests.md` | `*_test.go` beside owned packages | 002-011 | - | - | - |
+| 011 | **done** | `011-error-handling.md` | `internal/command/errors.go` | 003, 004, 006 | Luna-011 | `2ee32d6` | `go test ./...`; `go build ./...`; `git diff --check` |
+| 012 | **running** | `012-unit-tests.md` | `*_test.go` beside owned packages | 002-011 | Main Agent | - | - |
 | 013 | pending | `013-mvp-integration.md` | final wiring in `cmd/portwatch/main.go`, README | 009-012 | - | - | - |
 
 ## Future phases
