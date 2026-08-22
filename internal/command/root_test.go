@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -148,6 +149,28 @@ func TestParsePortRangeRejectsInvalidBounds(t *testing.T) {
 	}
 }
 
+func TestParsePortSetSortsAndDeduplicates(t *testing.T) {
+	got, err := Parse([]string{"--ports", "8080,3000,8080"})
+	if err != nil {
+		t.Fatalf("Parse(--ports) error = %v", err)
+	}
+	if got.Action != ActionPortSet || !reflect.DeepEqual(got.Ports, []int{3000, 8080}) {
+		t.Fatalf("Parse(--ports) = %#v", got)
+	}
+}
+
+func TestParsePortSetRejectsInvalidValues(t *testing.T) {
+	for _, value := range []string{"", "0,80", "80,65536", "80,wat"} {
+		args := []string{"--ports", value}
+		if value == "" {
+			args = []string{"--ports="}
+		}
+		if _, err := Parse(args); err == nil {
+			t.Errorf("Parse(%v) error = nil", args)
+		}
+	}
+}
+
 func TestRunJSONDoesNotWriteTableOnProcessInfoError(t *testing.T) {
 	deps := Dependencies{
 		Scanner: onePortScanner{record: model.PortInfo{Port: 8080, Protocol: "TCP", PID: 42}},
@@ -208,6 +231,25 @@ func TestRunPortRangeJSONFiltersAndSorts(t *testing.T) {
 	}
 	var stdout, stderr strings.Builder
 	code := run(context.Background(), []string{"--json", "3000-8080"}, deps, strings.NewReader(""), &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("run() code = %d, stderr=%q", code, stderr.String())
+	}
+	var response model.PortsResponse
+	if err := json.Unmarshal([]byte(stdout.String()), &response); err != nil {
+		t.Fatalf("stdout JSON error = %v; stdout=%q", err, stdout.String())
+	}
+	if len(response.Ports) != 2 || response.Ports[0].Port != 3000 || response.Ports[1].Port != 8080 {
+		t.Fatalf("ports = %+v", response.Ports)
+	}
+}
+
+func TestRunPortSetJSONFiltersAndSorts(t *testing.T) {
+	deps := Dependencies{
+		Scanner: rangeScanner{ports: []model.PortInfo{{Port: 8080, PID: 2}, {Port: 3000, PID: 1}, {Port: 9000, PID: 3}}},
+		Manager: fakeRootManager{},
+	}
+	var stdout, stderr strings.Builder
+	code := run(context.Background(), []string{"--json", "--ports", "8080,3000"}, deps, strings.NewReader(""), &stdout, &stderr)
 	if code != ExitSuccess {
 		t.Fatalf("run() code = %d, stderr=%q", code, stderr.String())
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -43,6 +44,7 @@ const (
 	ActionList Action = iota
 	ActionPort
 	ActionPortRange
+	ActionPortSet
 	ActionFree
 	ActionKill
 	ActionFind
@@ -58,6 +60,7 @@ type Command struct {
 	Action  Action
 	Port    int
 	PortEnd int
+	Ports   []int
 	PID     int
 	Query   string
 	Flags   flagOptions
@@ -79,7 +82,17 @@ func Parse(args []string) (Command, error) {
 		return Command{Action: ActionVersion, Flags: options}, nil
 	}
 	if len(positional) == 0 {
+		if options.PortsSet {
+			ports, setErr := parsePortSet(options.Ports)
+			if setErr != nil {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: options.Ports, Message: setErr.Error()}
+			}
+			return Command{Action: ActionPortSet, Ports: ports, Flags: options}, nil
+		}
 		return Command{Action: ActionList, Flags: options}, nil
+	}
+	if options.PortsSet {
+		return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: options.Ports, Message: "--ports cannot be combined with positional arguments"}
 	}
 	if len(positional) >= 2 && positional[0] == "find" {
 		query := strings.TrimSpace(strings.Join(positional[1:], " "))
@@ -197,7 +210,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		_, _ = fmt.Fprintln(stdout, "       portwatch <start-end>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch watch")
 		_, _ = fmt.Fprintln(stdout, "       portwatch tui")
-		_, _ = fmt.Fprintln(stdout, "Flags: --json --interval <duration> --protocol tcp")
+		_, _ = fmt.Fprintln(stdout, "Flags: --json --ports <p1,p2> --interval <duration> --protocol tcp")
 		return ExitSuccess
 	}
 	if command.Action == ActionVersion {
@@ -217,6 +230,8 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		return runPort(ctx, deps, command.Port, command.Flags.JSON, stdout, stderr)
 	case ActionPortRange:
 		return runPortRange(ctx, deps, command.Port, command.PortEnd, command.Flags.JSON, stdout, stderr)
+	case ActionPortSet:
+		return runPortSet(ctx, deps, command.Ports, command.Flags.JSON, stdout, stderr)
 	case ActionFree:
 		freeOutput := stdout
 		if command.Flags.JSON {
@@ -279,6 +294,29 @@ func parsePortRange(value string) (int, int, error) {
 		return 0, 0, fmt.Errorf("port range must use START-END with values from 1 to 65535")
 	}
 	return start, end, nil
+}
+
+func parsePortSet(value string) ([]int, error) {
+	parts := strings.Split(value, ",")
+	seen := make(map[int]struct{}, len(parts))
+	ports := make([]int, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		port, err := strconv.Atoi(part)
+		if err != nil || port < 1 || port > 65535 {
+			return nil, fmt.Errorf("ports must be a comma-separated list from 1 to 65535")
+		}
+		if _, exists := seen[port]; exists {
+			continue
+		}
+		seen[port] = struct{}{}
+		ports = append(ports, port)
+	}
+	if len(ports) == 0 {
+		return nil, fmt.Errorf("ports must be a comma-separated list from 1 to 65535")
+	}
+	sort.Ints(ports)
+	return ports, nil
 }
 
 func runList(ctx context.Context, deps Dependencies, asJSON bool, stdout, stderr io.Writer) int {
@@ -366,6 +404,46 @@ func runPortRange(ctx context.Context, deps Dependencies, start, end int, asJSON
 	filtered := make([]model.PortInfo, 0)
 	for _, record := range ports {
 		if record.Port >= start && record.Port <= end {
+			filtered = append(filtered, record)
+		}
+	}
+	infos := make(map[int]model.ProcessInfo, len(filtered))
+	for i := range filtered {
+		info, infoErr := deps.Manager.Info(ctx, filtered[i].PID)
+		if infoErr != nil {
+			PrintError(stderr, infoErr)
+			continue
+		}
+		infos[filtered[i].PID] = info
+		filtered[i].ProcessName = info.Name
+	}
+	if asJSON {
+		if err := RenderJSONWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
+			PrintError(stderr, err)
+			return ExitCode(err)
+		}
+		return ExitSuccess
+	}
+	if err := RenderPortsWithServices(stdout, filtered, infos, service.Rules{}); err != nil {
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+	return ExitSuccess
+}
+
+func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON bool, stdout, stderr io.Writer) int {
+	wanted := make(map[int]struct{}, len(requested))
+	for _, port := range requested {
+		wanted[port] = struct{}{}
+	}
+	ports, err := deps.Scanner.List(ctx)
+	if err != nil {
+		PrintError(stderr, err)
+		return ExitCode(err)
+	}
+	filtered := make([]model.PortInfo, 0)
+	for _, record := range ports {
+		if _, ok := wanted[record.Port]; ok {
 			filtered = append(filtered, record)
 		}
 	}

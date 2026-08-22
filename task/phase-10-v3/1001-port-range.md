@@ -2,7 +2,7 @@
 
 ## 目标
 
-实现 `portwatch START-END` 和 `portwatch --json START-END`，查询范围内的 TCP 监听端口。
+实现 `portwatch START-END`、`portwatch --json START-END` 和 `--ports p1,p2`，查询指定 TCP 监听端口。
 
 ## 负责文件
 
@@ -17,6 +17,8 @@
 - `START`、`END` 必须是 1 到 65535 的十进制整数
 - `START <= END`
 - 范围结果复用现有表格、JSON 和服务识别输出
+- `--ports` 使用逗号分隔，重复端口自动去重并排序
+- `--ports` 不能和位置参数组合使用
 - 结果按现有端口/PID排序
 - 无匹配结果仍返回成功；JSON 输出 `ports: []`
 - 非法范围返回参数错误和非零退出码

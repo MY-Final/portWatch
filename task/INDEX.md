@@ -61,4 +61,4 @@ Each future card is intentionally isolated in its own files and must not be sche
 
 | Task | 状态 | 文档 |
 | --- | --- | --- |
-| V3-1001 | implementation started | [`phase-10-v3/1001-port-range.md`](phase-10-v3/1001-port-range.md) |
+| V3-1001 | done | [`phase-10-v3/1001-port-range.md`](phase-10-v3/1001-port-range.md) |
