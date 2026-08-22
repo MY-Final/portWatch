@@ -13,21 +13,21 @@
 
 括号内任务可并行，但只有在其依赖完成后开始。`013` 是唯一负责最终 CLI 接线和验收的任务。
 
-| ID | 文件 | 主要文件所有权 | 依赖 |
-| --- | --- | --- | --- |
-| 001 | `001-project-init.md` | `go.mod`, `.gitignore`, 目录骨架 | 无 |
-| 002 | `002-domain-model.md` | `pkg/model/*.go` | 001 |
-| 003 | `003-cli-root.md` | `internal/command/root.go`, `cmd/portwatch/main.go` 初稿 | 001, 002 |
-| 004 | `004-port-scanner-interface.md` | `internal/port/scanner.go` | 002 |
-| 005 | `005-windows-port-scanner.md` | `internal/port/windows.go` | 004 |
-| 006 | `006-process-manager-interface.md` | `internal/process/manager.go` | 002 |
-| 007 | `007-windows-process-info.md` | `internal/process/windows.go` | 006 |
-| 008 | `008-kill-process.md` | `internal/process/windows.go` tests/termination additions | 006, 007 |
-| 009 | `009-free-port-command.md` | `internal/command/free.go` | 003, 004, 006, 007, 008 |
-| 010 | `010-output-table.md` | `internal/command/output.go` | 002, 003 |
-| 011 | `011-error-handling.md` | `internal/command/errors.go` | 003, 004, 006 |
-| 012 | `012-unit-tests.md` | `*_test.go` beside owned packages | 002-011 |
-| 013 | `013-mvp-integration.md` | final wiring in `cmd/portwatch/main.go`, README | 009-012 |
+| ID | 状态 | 文件 | 主要文件所有权 | 依赖 | Worker | Commit | 测试 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 001 | **running** | `001-project-init.md` | `go.mod`, `.gitignore`, 目录骨架 | 无 | Luna-001 | - | - |
+| 002 | pending | `002-domain-model.md` | `pkg/model/*.go` | 001 | - | - | - |
+| 003 | pending | `003-cli-root.md` | `internal/command/root.go`, `cmd/portwatch/main.go` 初稿 | 001, 002 | - | - | - |
+| 004 | pending | `004-port-scanner-interface.md` | `internal/port/scanner.go` | 002 | - | - | - |
+| 005 | pending | `005-windows-port-scanner.md` | `internal/port/windows.go` | 004 | - | - | - |
+| 006 | pending | `006-process-manager-interface.md` | `internal/process/manager.go` | 002 | - | - | - |
+| 007 | pending | `007-windows-process-info.md` | `internal/process/windows.go` | 006 | - | - | - |
+| 008 | pending | `008-kill-process.md` | `internal/process/windows.go` tests/termination additions | 006, 007 | - | - | - |
+| 009 | pending | `009-free-port-command.md` | `internal/command/free.go` | 003, 004, 006, 007, 008 | - | - | - |
+| 010 | pending | `010-output-table.md` | `internal/command/output.go` | 002, 003 | - | - | - |
+| 011 | pending | `011-error-handling.md` | `internal/command/errors.go` | 003, 004, 006 | - | - | - |
+| 012 | pending | `012-unit-tests.md` | `*_test.go` beside owned packages | 002-011 | - | - | - |
+| 013 | pending | `013-mvp-integration.md` | final wiring in `cmd/portwatch/main.go`, README | 009-012 | - | - | - |
 
 ## Future phases
 
