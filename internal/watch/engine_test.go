@@ -90,3 +90,22 @@ func TestEngineRetriesAfterScanError(t *testing.T) {
 		t.Fatalf("scanErrors=%d events=%d", scanErrors, events)
 	}
 }
+
+type canceledScanner struct{}
+
+func (canceledScanner) List(context.Context) ([]model.PortInfo, error)      { return nil, context.Canceled }
+func (canceledScanner) Port(context.Context, int) ([]model.PortInfo, error) { return nil, nil }
+
+func TestEngineDoesNotReportCancellationAsScanFailure(t *testing.T) {
+	var callbackCalls int
+	err := (Engine{
+		Scanner: canceledScanner{}, Interval: time.Millisecond,
+		OnScanError: func(error) error { callbackCalls++; return nil },
+	}).Run(context.Background(), func(Event) error { return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+	if callbackCalls != 0 {
+		t.Fatalf("OnScanError calls = %d, want 0", callbackCalls)
+	}
+}

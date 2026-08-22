@@ -48,6 +48,9 @@ func (e Engine) Run(ctx context.Context, emit func(Event) error) error {
 	for {
 		currentRecords, err := e.Scanner.List(ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
 			if e.OnScanError == nil {
 				return err
 			}
