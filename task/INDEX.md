@@ -16,7 +16,7 @@
 | ID | 状态 | 文件 | 主要文件所有权 | 依赖 | Worker | Commit | 测试 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 001 | **done** | `001-project-init.md` | `go.mod`, `.gitignore`, 目录骨架 | 无 | Luna-001 | `e6c150c` (+ `96b0615`) | `go test ./...`; `go build ./...`; `go list ./...` |
-| 002 | pending | `002-domain-model.md` | `pkg/model/*.go` | 001 | - | - | - |
+| 002 | **running** | `002-domain-model.md` | `pkg/model/*.go` | 001 | Luna-002 | - | - |
 | 003 | pending | `003-cli-root.md` | `internal/command/root.go`, `cmd/portwatch/main.go` 初稿 | 001, 002 | - | - | - |
 | 004 | pending | `004-port-scanner-interface.md` | `internal/port/scanner.go` | 002 | - | - | - |
 | 005 | pending | `005-windows-port-scanner.md` | `internal/port/windows.go` | 004 | - | - | - |
