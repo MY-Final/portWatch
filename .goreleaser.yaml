@@ -1,5 +1,11 @@
 version: 2
 
+# The origin remote points at a private Gitea; releases always go to GitHub.
+release:
+  github:
+    owner: MY-Final
+    name: portWatch
+
 before:
   hooks:
     - go mod tidy
