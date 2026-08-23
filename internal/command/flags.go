@@ -29,6 +29,7 @@ type flagOptions struct {
 	Help       bool
 	Version    bool
 	JSON       bool
+	Yes        bool
 	Interval   time.Duration
 }
 
@@ -59,6 +60,7 @@ func parseFlags(args []string) (flagOptions, []string, error) {
 	set.BoolVar(&options.Help, "h", false, "show help")
 	set.BoolVar(&options.Version, "version", false, "show version")
 	set.BoolVar(&options.JSON, "json", false, "output JSON")
+	set.BoolVar(&options.Yes, "yes", false, "assume yes for confirmation prompts")
 	set.DurationVar(&options.Interval, "interval", time.Second, "watch interval")
 	flagArgs, positional := intersperseFlags(set, args)
 	if err := set.Parse(flagArgs); err != nil {

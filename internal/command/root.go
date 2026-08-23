@@ -56,6 +56,7 @@ const (
 	ActionInfo
 	ActionHelp
 	ActionVersion
+	ActionUninstall
 )
 
 // Command is the parsed root command. Port is set for port-oriented actions,
@@ -107,6 +108,9 @@ func Parse(args []string) (Command, error) {
 			return Command{Action: ActionFind, Query: query, Flags: options}, nil
 		}
 	}
+	if len(positional) >= 2 && positional[0] == "uninstall" {
+		return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: positional[1], Message: "uninstall does not take arguments"}
+	}
 	switch len(positional) {
 	case 0:
 	case 1:
@@ -118,6 +122,8 @@ func Parse(args []string) (Command, error) {
 			return Command{Action: ActionWatch, Flags: options}, nil
 		case "tui":
 			return Command{Action: ActionTUI, Flags: options}, nil
+		case "uninstall":
+			return Command{Action: ActionUninstall, Flags: options}, nil
 		case "info":
 			return Command{}, &ParseError{Kind: ParseErrorInvalidPID, Argument: arg, Message: "info requires a pid"}
 		case "free":
@@ -245,7 +251,8 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		_, _ = fmt.Fprintln(stdout, "       portwatch <start-end>")
 		_, _ = fmt.Fprintln(stdout, "       portwatch watch")
 		_, _ = fmt.Fprintln(stdout, "       portwatch tui [port]")
-		_, _ = fmt.Fprintln(stdout, "Flags: --json --ports <p1,p2> --pid <p1,p2> --process <name> --state <state> --interval <duration> --protocol tcp")
+		_, _ = fmt.Fprintln(stdout, "       portwatch uninstall")
+		_, _ = fmt.Fprintln(stdout, "Flags: --json --yes --ports <p1,p2> --pid <p1,p2> --process <name> --state <state> --interval <duration> --protocol tcp")
 		return ExitSuccess
 	}
 	if command.Action == ActionVersion {
@@ -262,6 +269,13 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		parseErr := &ParseError{Kind: ParseErrorInvalidFilter, Message: "query filters are only supported for port queries and watch"}
 		PrintError(stderr, parseErr)
 		return ExitCode(parseErr)
+	}
+	if command.Action == ActionUninstall {
+		err := Uninstall(command.Flags.Yes, stdin, stdout)
+		if err != nil {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
 	}
 	if command.Action == ActionTUI && command.Flags.Protocol != "tcp" {
 		parseErr := &ParseError{Kind: ParseErrorInvalidFilter, Message: "tui currently supports TCP listening ports only"}

@@ -41,7 +41,7 @@ func ExitCode(err error) int {
 	if isArgumentError(err) {
 		return ExitArguments
 	}
-	if errors.Is(err, process.ErrAccessDenied) || errors.Is(err, os.ErrPermission) || os.IsPermission(err) {
+	if errors.Is(err, errUninstallBlocked) || errors.Is(err, process.ErrAccessDenied) || errors.Is(err, os.ErrPermission) || os.IsPermission(err) {
 		return ExitPermission
 	}
 	if errors.Is(err, ErrKillFailed) || errors.Is(err, ErrPortStillOccupied) || errors.Is(err, ErrProtectedProcess) {
@@ -85,6 +85,8 @@ func errorMessage(err error) string {
 		return "operation cancelled"
 	case errors.Is(err, ErrUserCancelled):
 		return "operation cancelled"
+	case errors.Is(err, errUninstallBlocked):
+		return "binary is in use or access is denied; close running portwatch processes and retry"
 	case errors.Is(err, process.ErrAccessDenied), errors.Is(err, os.ErrPermission), os.IsPermission(err):
 		return "permission denied; 请以管理员身份运行"
 	case errors.Is(err, model.ErrInvalidPort):
