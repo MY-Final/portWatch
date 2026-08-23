@@ -217,7 +217,7 @@ pw --expect occupied --timeout 30s wait 8080
 | `2` | 参数、端口、PID 或筛选条件无效 |
 | `3` | 扫描或进程信息读取失败，或卸载等其他执行失败 |
 | `4` | 权限不足（含卸载时二进制被占用） |
-| `5` | Kill 失败、关键 PID 拒绝或 Kill 后验证失败 |
+| `5` | Kill 失败、关键 PID 拒绝或 Kill 后验证失败；确认期间 PID 被复用（身份变化）同样拒绝终止 |
 | `124` | `wait` 等待超时（GNU timeout 惯例） |
 
 ## 🖥️ TUI
@@ -293,7 +293,8 @@ $env:GOOS = "darwin";  $env:GOARCH = "arm64"; go build ./cmd/portwatch
 ```
 
 发布配置见 [`.goreleaser.yaml`](.goreleaser.yaml)，CI 见 [`.github/workflows/`](.github/workflows/)；
-开发任务与产品规划见 [`task/`](task/) 与 [`prd/`](prd/)。
+开发任务与产品规划见 [`task/`](task/) 与 [`prd/`](prd/)，安全审计报告见
+[`docs/security-review.md`](docs/security-review.md)。
 
 ## 许可
 
