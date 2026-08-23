@@ -92,3 +92,52 @@ V4 的产品范围、JSON 合同、退出码、安全边界和建议任务拆分
 V6 将 TUI 从“端口表”收敛为端口诊断工作流：默认 Listening、可选端口聚焦、独立详情和确认页、Kill 后验证，以及通过 View 菜单进入 Connections/All。
 
 产品定义见 [`../prd/v6-guided-tui.md`](../prd/v6-guided-tui.md)。当前实现已覆盖命令入口、核心页面状态、Windows Scope 扫描、测试和文档；后续只添加 V6 PRD 明确的验收修正，不继续恢复 V5 首屏快捷键堆叠。
+
+## V6 之后实现日志（v0.6.0 – v0.8.0）
+
+V6 交付后进入人机协作迭代：以下工作均由用户与本仓库 Agent 会话完成，无预拆分任务卡，按版本与主题补记于此，细节以各 commit message 与 README 为准。
+
+### v0.6.0 — Windows 进程信息直读 PEB
+
+| 主题 | 内容 | Commit |
+| --- | --- | --- |
+| 进程参数直读 | `NtQueryInformationProcess` + `ReadProcessMemory` 读 PEB 的命令行/工作目录，替代 PowerShell/WMI 外部进程，百端口级列表从 ~10s 降到 ~50ms | `442d099` |
+| 工作目录修复 | Win32_Process 本无 WorkingDirectory，PEB `CurrentDirectory` 补齐真实值 | `442d099` |
+| 错误分类去本地化 | NTSTATUS/Win32 错误码映射替代英文消息匹配 | `442d099` |
+| 文档 | 用户操作手册（后随仓库卫生改为 `docs/operation-manual.md`） | `275efbe` |
+
+### v0.7.0 — pw 别名与维护批次
+
+| 主题 | 内容 | Commit |
+| --- | --- | --- |
+| pw 短别名 | argv[0] 识别二进制名（BusyBox 模式），`pw.exe` 的帮助与错误前缀跟随显示 | `6e4669f` |
+| 维护批次 | TUI 版本注入、错误报告按 PID 升序确定化、root.go 去重、进程信息有界并发（≤8）、GNU 风格参数交错、平台能力矩阵文档、仓库卫生 | `259a17d` |
+| processinfo 抽包 | 有界并发查询移入 `internal/processinfo`，TUI refresh 复用（消除 command↔tui 循环依赖） | `bd2839d` |
+| Linux /proc 单遍扫描 | inode→PID 映射一次构建，两表共用；顺带修复 parseProcAddress 解码长度判断（原实现在真实 /proc 上必错） | `83957ef` |
+
+### v0.7.x — 卸载与分发
+
+| 主题 | 内容 | Commit |
+| --- | --- | --- |
+| uninstall 子命令 | y/yes 确认 + `--yes`；Windows 改名 + 分离进程延迟删除；保守用户 PATH 清理（默认目录且清空才动）；退出码 0/2/3/4 | `46c0c44` |
+| 自删除修正 | 引号经 exec.Command 被 MSVCRT 转义导致 cmd 语法错误 → 改为生成自删除批处理；过渡产物不再阻断 PATH 清理 | `72ddaa2` |
+| 安装脚本 | `install.ps1` / `install.sh`：Release 下载 + SHA256 校验 + 双别名安装 + PATH/rc 配置 + 卸载模式 | `e27719c`, `9514f21`, `e80ac5c` |
+| 模块路径 | `github.com/portwatch/portwatch` → `github.com/MY-Final/portWatch`，全量 import 同步 | `a48b793` |
+| README 重设计 | pw 优先、徽章/表格/折叠块、真实输出示例 | `4f1d03f` |
+| CI | 平台无关化测试修正（驱动 ubuntu runner 抓出 fixture 缺陷）、actions 升 v7 | `5aa6adc`, `99bd3b0` |
+| 帮助跟随程序名 | usage 行使用 BinaryName | `2976122` |
+| 别名一并卸载 | 卸载自身时清理同目录另一别名 | `98013c3` |
+
+### v0.8.0 — wait / 父进程链 / 平台对齐（分支 `feat/wait-parent-chain`）
+
+| 主题 | 内容 | Commit |
+| --- | --- | --- |
+| wait 子命令 | `pw wait <port>` 阻塞等待空闲/占用（`--expect`、`--timeout` 退出码 124、`--json` 单事件） | `89bd510` |
+| 父进程链 | `ProcessInfo.ParentPID`（WithParent 修饰）；Windows PBI InheritedFromUniqueProcessID / Linux status PPid / macOS ps；`processinfo.Ancestors` ≤8 跳含环保护；info 文本 + TUI 详情 + JSON 加法字段 | `f6b38cf` |
+| 平台对齐 | Linux UDP（/proc/net/udp）+ 全状态连接视图（ListScope + 状态码表）+ cwd；macOS UDP（lsof）+ cwd；协议不支持文案去 Windows 专属表述 | `c53e090`, `e644566` |
+| 发布 | goreleaser 发布目标钉死 GitHub；`v0.7.0`/`v0.8.0` 双 Release 发布（含双远端 tag 推送） | `e0ce5d6` + tags |
+
+### Backlog 状态更新
+
+- `backlog/001-udp.md`：已由 v0.8.0 完成全部三平台实现，卡片已标记 done。
+- `backlog/002-config.md`、`backlog/003-security-review.md`：仍为候选，未调度。

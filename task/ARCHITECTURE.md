@@ -32,3 +32,13 @@ Library packages return wrapped sentinel errors and never print, panic, or exit.
 
 After project initialization and models, scanner interface, process interface, CLI parsing, and error mapping can proceed independently. Windows scanner and process implementation are independent files. The only intentional same-file sequence is `007 -> 008` for `internal/process/windows.go`, followed by `013` for final `main.go` wiring. This is reflected in `INDEX.md`.
 
+
+## Post-MVP evolution（v0.6.0 起）
+
+初始边界的依赖方向保持不变；在此之上新增的组件：
+
+- `internal/processinfo`：`command` 与 `tui` 共用的有界并发进程信息查询与父链遍历，仅依赖 model，位于两包之下避免循环依赖；
+- `wait` / `uninstall`：均在 `internal/command` 内编排；wait 轮询 `Scanner.Port`，uninstall 通过注入钩子隔离 `os.Executable` 与用户 PATH 操作；
+- 分发层（仓库根 `install.ps1` / `install.sh` + goreleaser）在 Go 模块之外，安装脚本按资产后缀匹配 Release，不感知具体命名。
+
+平台实现的实际能力以 README 能力矩阵为现行事实来源；本文件的历史段落保留 MVP 时期的规划语境。

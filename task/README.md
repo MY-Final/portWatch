@@ -1,6 +1,7 @@
 # PortWatch Task Plan
 
-PortWatch 的任务拆分目录。MVP、V2、V3 和 V4 已经实现；后续实现 Agent 仍以本目录中的目标结构和接口契约为准。
+PortWatch 的任务拆分目录。MVP 至 V6 的各阶段均已实现；V6 之后（v0.6.0–v0.8.0）的工作按实现日志补记于
+[`INDEX.md`](INDEX.md) 末节，后续实现 Agent 仍以本目录中的目标结构和接口契约为准。
 
 ## 执行规则
 
@@ -45,9 +46,10 @@ internal/command/errors.go
 
 | 阶段 | 目录 | 状态 |
 | --- | --- | --- |
-| Phase 1 | `phase-01-mvp/` | 当前执行 |
-| Phase 2-9 | `phase-02-cli/` 至 `phase-09-release/` | 仅规划 |
-| Backlog | `backlog/` | 低优先级候选 |
+| Phase 1-10 | `phase-01-mvp/` 至 `phase-10-v3/` | 已完成 |
+| V4 / V5 / V6 | 见 [`../prd/`](../prd/) 与本目录各表 | 已完成（V5 被 V6 取代） |
+| v0.6.0–v0.8.0 | 无预拆分卡片，见 [`INDEX.md`](INDEX.md) 实现日志 | 已完成 |
+| Backlog | `backlog/` | 001-udp 已完成；002/003 候选 |
 
 TUI 产品重构见 [`../prd/v5-tui-polish.md`](../prd/v5-tui-polish.md)，对应任务位于
 `phase-05-tui-polish/`。该阶段默认先完成任务评审，再按 README 中的依赖图调度。
