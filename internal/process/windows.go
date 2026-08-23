@@ -66,7 +66,9 @@ func (WindowsManager) Exists(_ context.Context, pid int) (bool, error) {
 		return false, err
 	}
 
-	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION, false, uint32(pid))
+	// GetExitCodeProcess only needs the limited query right; requesting
+	// PROCESS_QUERY_INFORMATION would ask for more than the check requires.
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
 	if err != nil {
 		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) || errors.Is(err, windows.ERROR_INVALID_HANDLE) {
 			return false, nil
