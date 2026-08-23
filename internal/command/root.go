@@ -57,6 +57,7 @@ const (
 	ActionHelp
 	ActionVersion
 	ActionUninstall
+	ActionWait
 )
 
 // Command is the parsed root command. Port is set for port-oriented actions,
@@ -120,6 +121,8 @@ func Parse(args []string) (Command, error) {
 			return Command{Action: ActionHelp, Flags: options}, nil
 		case "watch":
 			return Command{Action: ActionWatch, Flags: options}, nil
+		case "wait":
+			return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: arg, Message: "wait requires a port"}
 		case "tui":
 			return Command{Action: ActionTUI, Flags: options}, nil
 		case "uninstall":
@@ -155,6 +158,19 @@ func Parse(args []string) (Command, error) {
 				return Command{}, parseErr
 			}
 			return Command{Action: ActionWatch, Port: port, Flags: options}, nil
+		}
+		if positional[0] == "wait" {
+			port, parseErr := parsePortArg(positional[1])
+			if parseErr != nil {
+				return Command{}, parseErr
+			}
+			if options.Expect != "free" && options.Expect != "occupied" {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidFilter, Argument: options.Expect, Message: "--expect must be free or occupied"}
+			}
+			if options.Timeout < 0 {
+				return Command{}, &ParseError{Kind: ParseErrorInvalidFilter, Argument: options.Timeout.String(), Message: "--timeout must not be negative"}
+			}
+			return Command{Action: ActionWait, Port: port, Flags: options}, nil
 		}
 		if positional[0] == "free" {
 			port, parseErr := parsePortArg(positional[1])
@@ -251,6 +267,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 			"find <name>",
 			"<start-end>",
 			"watch",
+			"wait <port>",
 			"tui [port]",
 			"uninstall",
 		}
@@ -258,7 +275,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		for _, line := range usage[1:] {
 			_, _ = fmt.Fprintf(stdout, "       %s %s\n", BinaryName, line)
 		}
-		_, _ = fmt.Fprintln(stdout, "Flags: --json --yes --ports <p1,p2> --pid <p1,p2> --process <name> --state <state> --interval <duration> --protocol tcp")
+		_, _ = fmt.Fprintln(stdout, "Flags: --json --yes --ports <p1,p2> --pid <p1,p2> --process <name> --state <state> --interval <duration> --expect free|occupied --timeout <duration> --protocol tcp")
 		return ExitSuccess
 	}
 	if command.Action == ActionVersion {
@@ -350,6 +367,12 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		} else {
 			err = WatchWithFilter(ctx, deps.Scanner, deps.Manager, command.Flags.Interval, command.Port, queryFilter, stdout, stderr)
 		}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			PrintError(stderr, err)
+		}
+		return ExitCode(err)
+	case ActionWait:
+		err := Wait(ctx, deps.Scanner, command.Port, command.Flags, stdout)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			PrintError(stderr, err)
 		}

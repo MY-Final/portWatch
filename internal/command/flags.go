@@ -17,20 +17,23 @@ var Version = "0.7.0"
 var BinaryName = "portwatch"
 
 type flagOptions struct {
-	Protocol   string
-	Ports      string
-	PortsSet   bool
-	Process    string
-	ProcessSet bool
-	PIDs       string
-	PIDsSet    bool
-	State      string
-	StateSet   bool
-	Help       bool
-	Version    bool
-	JSON       bool
-	Yes        bool
-	Interval   time.Duration
+	Protocol    string
+	Ports       string
+	PortsSet    bool
+	Process     string
+	ProcessSet  bool
+	PIDs        string
+	PIDsSet     bool
+	State       string
+	StateSet    bool
+	Help        bool
+	Version     bool
+	JSON        bool
+	Yes         bool
+	Interval    time.Duration
+	IntervalSet bool
+	Expect      string
+	Timeout     time.Duration
 }
 
 func parseFlags(args []string) (flagOptions, []string, error) {
@@ -48,6 +51,9 @@ func parseFlags(args []string) (flagOptions, []string, error) {
 		if arg == "--state" || strings.HasPrefix(arg, "--state=") {
 			options.StateSet = true
 		}
+		if arg == "--interval" || strings.HasPrefix(arg, "--interval=") {
+			options.IntervalSet = true
+		}
 	}
 	set := flag.NewFlagSet(BinaryName, flag.ContinueOnError)
 	set.SetOutput(io.Discard)
@@ -61,6 +67,8 @@ func parseFlags(args []string) (flagOptions, []string, error) {
 	set.BoolVar(&options.Version, "version", false, "show version")
 	set.BoolVar(&options.JSON, "json", false, "output JSON")
 	set.BoolVar(&options.Yes, "yes", false, "assume yes for confirmation prompts")
+	set.StringVar(&options.Expect, "expect", "free", "state to wait for: free or occupied (wait command)")
+	set.DurationVar(&options.Timeout, "timeout", 0, "give up waiting after this duration (wait command)")
 	set.DurationVar(&options.Interval, "interval", time.Second, "watch interval")
 	flagArgs, positional := intersperseFlags(set, args)
 	if err := set.Parse(flagArgs); err != nil {

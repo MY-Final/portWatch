@@ -20,11 +20,19 @@ const (
 	ExitOperation  = 3
 	ExitPermission = 4
 	ExitKill       = 5
+	// ExitWaitTimeout follows the GNU timeout convention so scripts around
+	// `wait` can distinguish "still not ready" from other failures. It sits
+	// outside the 0-5 range deliberately.
+	ExitWaitTimeout = 124
 	// ExitSystem is kept as a source-compatible alias for operation failures.
 	ExitSystem = ExitOperation
 	// ExitCancelled is zero because cancellation is a successful user decision.
 	ExitCancelled = ExitSuccess
 )
+
+// errWaitTimeout marks a wait command that gave up before the port reached
+// the expected state.
+var errWaitTimeout = errors.New("timed out waiting for port state")
 
 // ExitCode maps an operation error to the stable CLI exit code. It never
 // terminates the process, allowing callers and tests to decide what to do.
@@ -37,6 +45,9 @@ func ExitCode(err error) int {
 	}
 	if errors.Is(err, ErrUserCancelled) {
 		return ExitSuccess
+	}
+	if errors.Is(err, errWaitTimeout) {
+		return ExitWaitTimeout
 	}
 	if isArgumentError(err) {
 		return ExitArguments

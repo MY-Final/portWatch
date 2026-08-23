@@ -120,6 +120,7 @@ Port 5173 is now available.
 | `pw find <name>` | 按进程名搜索及其监听端口 |
 | `pw info <pid>` | 查看 PID 详情（命令行 / 路径 / 工作目录）及其端口 |
 | `pw watch [port]` | 实时报告监听端口变化，Ctrl+C 退出 |
+| `pw wait <port>` | 阻塞等待端口空闲（`--expect occupied` 等被占用，`--timeout` 限时可选） |
 | `pw tui [port]` | 交互式终端界面，可聚焦单个端口 |
 | `pw uninstall` | 卸载自身（`--yes` 跳过确认） |
 | `pw --help` / `pw --version` | 帮助与版本 |
@@ -134,7 +135,9 @@ Port 5173 is now available.
 | `--process <name>` | 按进程名筛选 |
 | `--pid <p1,p2>` | 按 PID 集合筛选 |
 | `--state <state>` | 按端口状态筛选（如 `LISTENING`） |
-| `--interval <duration>` | `watch` 轮询周期（默认 `1s`） |
+| `--interval <duration>` | `watch` 轮询周期（默认 `1s`；`wait` 未指定时默认 `200ms`） |
+| `--expect free\|occupied` | `wait` 等待的目标状态（默认 `free`） |
+| `--timeout <duration>` | `wait` 的等待上限，超时退出码 `124`（默认不限时） |
 
 选项与位置参数可任意交错（GNU 风格）：`pw --json 8080`、`pw 8080 --json`、`pw find node --json`
 均合法；`--flag value` 与 `--flag=value` 两种写法都支持。
@@ -163,6 +166,12 @@ pw --interval 2s watch
 
 # 只监控 8080
 pw watch 8080
+
+# 阻塞等待 8080 空闲（比如等旧进程退出），Ctrl+C 退出码 0
+pw wait 8080
+
+# 等服务起来（端口被占用即返回），最多等 30 秒
+pw --expect occupied --timeout 30s wait 8080
 ```
 
 ### JSON 输出
@@ -189,6 +198,7 @@ pw watch 8080
 | `3` | 扫描或进程信息读取失败，或卸载等其他执行失败 |
 | `4` | 权限不足（含卸载时二进制被占用） |
 | `5` | Kill 失败、关键 PID 拒绝或 Kill 后验证失败 |
+| `124` | `wait` 等待超时（GNU timeout 惯例） |
 
 ## 🖥️ TUI
 
