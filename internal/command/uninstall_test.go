@@ -32,20 +32,22 @@ func TestParseUninstall(t *testing.T) {
 }
 
 func TestRemovePathEntry(t *testing.T) {
+	// Plain slash paths: no drive-letter colons, which the ':' list
+	// separator on unix would otherwise split mid-entry.
 	sep := string(os.PathListSeparator)
-	bin := strings.Join([]string{"C:", "Users", "u", "bin"}, string(filepath.Separator))
+	bin := "/users/u/bin"
 	for _, tc := range []struct {
 		name    string
 		path    string
 		want    string
 		removed bool
 	}{
-		{"removes matching entry", strings.Join([]string{"C:\\a", bin, "C:\\b"}, sep), strings.Join([]string{"C:\\a", "C:\\b"}, sep), true},
-		{"keeps path when entry absent", strings.Join([]string{"C:\\a", "C:\\b"}, sep), strings.Join([]string{"C:\\a", "C:\\b"}, sep), false},
-		{"matches case-insensitively", strings.Join([]string{"C:\\A", strings.ToUpper(bin)}, sep), "C:\\A", true},
-		{"matches trailing separator", strings.Join([]string{bin + string(filepath.Separator), "C:\\a"}, sep), "C:\\a", true},
-		{"preserves doubled separators elsewhere", strings.Join([]string{"C:\\a", "", bin}, sep), "C:\\a" + sep, true},
-		{"preserves trailing separator", strings.Join([]string{"C:\\a", bin, ""}, sep), "C:\\a" + sep, true},
+		{"removes matching entry", strings.Join([]string{"/a", bin, "/b"}, sep), strings.Join([]string{"/a", "/b"}, sep), true},
+		{"keeps path when entry absent", strings.Join([]string{"/a", "/b"}, sep), strings.Join([]string{"/a", "/b"}, sep), false},
+		{"matches case-insensitively", strings.Join([]string{"/A", strings.ToUpper(bin)}, sep), "/A", true},
+		{"matches trailing separator", strings.Join([]string{bin + "/", "/a"}, sep), "/a", true},
+		{"preserves doubled separators elsewhere", strings.Join([]string{"/a", "", bin}, sep), "/a" + sep, true},
+		{"preserves trailing separator", strings.Join([]string{"/a", bin, ""}, sep), "/a" + sep, true},
 	} {
 		got, removed := removePathEntry(tc.path, bin)
 		if got != tc.want || removed != tc.removed {
@@ -98,7 +100,7 @@ func writeFakeBinary(t *testing.T, path string) {
 
 func TestUninstallCancelsWithoutConfirmation(t *testing.T) {
 	home := t.TempDir()
-	binDir := filepath.Join(home, "bin")
+	binDir := defaultInstallDir(home)
 	executable := filepath.Join(binDir, "portwatch.exe")
 	writeFakeBinary(t, executable)
 	recorder := installUninstallHooks(t, executable, home)
@@ -121,7 +123,7 @@ func TestUninstallCancelsWithoutConfirmation(t *testing.T) {
 
 func TestUninstallConfirmedRemovesBinaryAndCleansPath(t *testing.T) {
 	home := t.TempDir()
-	binDir := filepath.Join(home, "bin")
+	binDir := defaultInstallDir(home)
 	executable := filepath.Join(binDir, "portwatch.exe")
 	writeFakeBinary(t, executable)
 	recorder := installUninstallHooks(t, executable, home)
@@ -144,7 +146,7 @@ func TestUninstallConfirmedRemovesBinaryAndCleansPath(t *testing.T) {
 
 func TestUninstallYesSkipsPrompt(t *testing.T) {
 	home := t.TempDir()
-	binDir := filepath.Join(home, "bin")
+	binDir := defaultInstallDir(home)
 	executable := filepath.Join(binDir, "portwatch.exe")
 	writeFakeBinary(t, executable)
 	recorder := installUninstallHooks(t, executable, home)
@@ -163,7 +165,7 @@ func TestUninstallYesSkipsPrompt(t *testing.T) {
 
 func TestUninstallLeavesNonEmptyDirectoryPathAlone(t *testing.T) {
 	home := t.TempDir()
-	binDir := filepath.Join(home, "bin")
+	binDir := defaultInstallDir(home)
 	executable := filepath.Join(binDir, "portwatch.exe")
 	writeFakeBinary(t, executable)
 	writeFakeBinary(t, filepath.Join(binDir, "other.exe"))
@@ -202,7 +204,7 @@ func TestUninstallLeavesNonDefaultDirectoryPathAlone(t *testing.T) {
 
 func TestRunUninstallExitCodes(t *testing.T) {
 	home := t.TempDir()
-	binDir := filepath.Join(home, "bin")
+	binDir := defaultInstallDir(home)
 	executable := filepath.Join(binDir, "portwatch.exe")
 	writeFakeBinary(t, executable)
 	_ = installUninstallHooks(t, executable, home)
