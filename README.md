@@ -23,6 +23,7 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 - 查看 PID 详情及其端口：`portwatch info 1234`
 - JSON 查看 PID 详情：`portwatch --json info 1234`
 - 交互式终端界面：`portwatch tui`、聚焦端口：`portwatch tui 8080`
+- 卸载自身：`portwatch uninstall`（`--yes` 跳过确认）
 - `--help`、`--version` 和 `--protocol tcp|udp|all`
 
 `free` 会先显示进程详情并要求输入 `y` 或 `yes`，终止后重新扫描端口；直接回车或输入其他内容都会取消操作。
@@ -33,7 +34,24 @@ Windows/Linux 下无冲突。）
 
 ## Windows 安装
 
-要求 Windows 和 Go 1.22 或更新版本。在项目根目录执行：
+一键安装（从 GitHub Release 下载对应架构的 zip，校验 SHA256 后装入
+`%USERPROFILE%\bin` 并按需补充用户 PATH）：
+
+```powershell
+irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1 | iex
+```
+
+管道执行无法向脚本传参（`iex` 只接收整段脚本文本），需要带参数时改用：
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1))) -Version v0.7.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1))) -Uninstall
+```
+
+linux/macOS 对应 `curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | bash`
+（可用 `PORTWATCH_VERSION=v0.7.0` 固定版本）。
+
+也可以从源码安装。要求 Windows 和 Go 1.22 或更新版本，在项目根目录执行：
 
 ```powershell
 $bin = Join-Path $env:USERPROFILE "bin"
@@ -60,6 +78,21 @@ portwatch 8080
 ```
 
 如果查询或终止进程时出现 `access denied`，请使用“以管理员身份运行”的 PowerShell。
+
+## 卸载
+
+三种方式任选其一：
+
+1. 命令行卸载（推荐）：`portwatch uninstall`。先显示将要删除的二进制路径，输入 `y`/`yes` 确认，
+   回车或其他输入取消（退出码 0）；`--yes` 跳过确认。Windows 下运行中的 exe 无法直接删除，
+   会先把自身改名为 `portwatch.uninstalling.exe`，再由分离进程在主进程退出后延迟删除。
+   PATH 清理是保守的：只有当二进制位于默认安装目录（`%USERPROFILE%\bin` / `~/.local/bin`）
+   且删除后该目录为空时，才从用户级 PATH 移除该目录；否则只打印残留目录位置，
+   绝不触碰系统级 PATH。unix 没有统一的用户级 PATH 存储，只提示需要从 shell 配置移除的行。
+2. 脚本卸载：`.\install.ps1 -Uninstall`（Windows）、`./install.sh --uninstall`（linux/macOS）。
+   未安装时输出 `already uninstalled` 并以退出码 0 结束；文件被占用时报错并提示先关闭 portwatch 进程。
+3. 手动卸载：删除 `%USERPROFILE%\bin\portwatch.exe`（及 `pw.exe`）或 `~/.local/bin/portwatch`，
+   目录清空后按需从用户 PATH 移除对应条目。
 
 ## 使用示例
 
@@ -161,10 +194,10 @@ Listening/Connections/All，`?` 查看完整帮助，`Q` 退出。终止后 Port
 
 | 退出码 | 含义 |
 | --- | --- |
-| `0` | 查询成功、空结果、用户取消或 Ctrl+C |
+| `0` | 查询成功、空结果、用户取消、Ctrl+C 或卸载成功 |
 | `2` | 参数、端口、PID 或筛选条件无效 |
-| `3` | 扫描或进程信息读取失败 |
-| `4` | 权限不足 |
+| `3` | 扫描或进程信息读取失败，或卸载等其他执行失败 |
+| `4` | 权限不足（含卸载时二进制被占用） |
 | `5` | Kill 失败、关键 PID 拒绝或 Kill 后验证失败 |
 
 全局选项与位置参数可以任意交错（GNU 风格）：`portwatch --json 8080`、
