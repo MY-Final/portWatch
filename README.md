@@ -57,7 +57,9 @@ curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh 
 curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | PORTWATCH_VERSION=v0.7.0 bash
 ```
 
-装入 `~/.local/bin`（不在 PATH 时只打印一行 export 提示，不改动 rc 文件）。
+装入 `~/.local/bin`；目录不在 PATH 时自动在 `~/.bashrc`（zsh 为 `~/.zshrc`）追加一行**带标记**的
+`export PATH`（卸载时只删这一行，不动你自己写的内容），当前终端 `source` 一下或重开即可使用；
+其他 shell 会打印手动添加提示。
 
 ### 从源码构建
 
@@ -237,6 +239,7 @@ pw watch 8080
 - Windows 下运行中的 exe 无法直接删除：先改名为 `<name>.uninstalling.exe`，由分离进程在主进程退出后延迟删除；
 - PATH 清理是保守的：仅当二进制位于默认安装目录（`%USERPROFILE%\bin` / `~/.local/bin`）且删除后为空时，
   才从用户级 PATH 移除该目录，绝不触碰系统级 PATH；unix 无统一用户级 PATH 存储，只提示需从 shell 配置移除的行；
+- `install.sh` 卸载时会移除安装时写入 rc 文件的那行带标记的 `export PATH`；
 - 脚本卸载在未安装时输出 `already uninstalled` 并以退出码 0 结束。
 
 </details>

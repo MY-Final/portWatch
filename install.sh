@@ -29,6 +29,38 @@ for arg in "$@"; do
   esac
 done
 
+# Append the PATH export to the user's shell rc, marked so uninstall can
+# remove exactly this line and nothing the user wrote themselves.
+PATH_MARKER="# portwatch-install"
+
+add_shell_path() {
+  case ":$PATH:" in *":$INSTALL_DIR:"*) return 0 ;; esac
+  shell_name=$(basename "${SHELL:-/bin/bash}")
+  case "$shell_name" in
+    bash) rc_file="$HOME/.bashrc" ;;
+    zsh) rc_file="$HOME/.zshrc" ;;
+    *)
+      echo "note: add $INSTALL_DIR to PATH in your $shell_name config:"
+      echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+      return 0
+      ;;
+  esac
+  if ! grep -qs "$PATH_MARKER" "$rc_file"; then
+    printf 'export PATH="$HOME/.local/bin:$PATH" %s\n' "$PATH_MARKER" >> "$rc_file"
+  fi
+  echo "Added $INSTALL_DIR to PATH in $rc_file."
+  echo "Run 'source $rc_file' (or open a new terminal) to use portwatch now."
+}
+
+remove_shell_path() {
+  for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    [ -f "$rc_file" ] || continue
+    grep -qs "$PATH_MARKER" "$rc_file" || continue
+    sed -i.bak "/$PATH_MARKER/d" "$rc_file" && rm -f "${rc_file}.bak"
+    echo "Removed the PATH line from $rc_file."
+  done
+}
+
 if [ "$UNINSTALL" -eq 1 ]; then
   removed_any=0
   for name in portwatch pw; do
@@ -44,14 +76,13 @@ if [ "$UNINSTALL" -eq 1 ]; then
     echo "portwatch not found in $INSTALL_DIR (already uninstalled)."
     exit 0
   fi
+  remove_shell_path
   if [ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
     # rmdir only removes empty directories, so other tools in ~/.local/bin
     # keep it alive and the failure is silently ignored.
     if rmdir "$INSTALL_DIR" 2>/dev/null; then
       echo "Removed empty directory $INSTALL_DIR."
     fi
-  else
-    echo "If $INSTALL_DIR was added to PATH in your shell profile, remove that line too."
   fi
   echo "portwatch uninstalled."
   exit 0
@@ -130,14 +161,10 @@ mv -f "$BIN" "$INSTALL_DIR/portwatch" || die "failed to install into $INSTALL_DI
 cp -f "$INSTALL_DIR/portwatch" "$INSTALL_DIR/pw"
 chmod +x "$INSTALL_DIR/portwatch" "$INSTALL_DIR/pw"
 
-case ":$PATH:" in
-  *":$INSTALL_DIR:"*) ;;
-  *)
-    echo "note: $INSTALL_DIR is not in PATH; add it with:"
-    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-    ;;
-esac
+add_shell_path
 
 say "Installed"
-"$INSTALL_DIR/portwatch" --version
+if ! "$INSTALL_DIR/portwatch" --version; then
+  echo "warning: installed, but the binary failed to run on this platform" >&2
+fi
 echo "Installed to $INSTALL_DIR/portwatch"
