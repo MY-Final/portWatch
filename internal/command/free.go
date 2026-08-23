@@ -83,6 +83,15 @@ func Free(ctx context.Context, scanner port.Scanner, manager process.Manager, po
 		if _, seen := terminated[record.PID]; seen {
 			continue
 		}
+		// Same reuse guard as kill: the identity was resolved before the
+		// confirmation prompt, so re-verify it maps to the same process.
+		fresh, recheckErr := manager.Info(ctx, record.PID)
+		if recheckErr != nil {
+			return fmt.Errorf("%w: re-verify pid %d before termination: %w", ErrKillFailed, record.PID, recheckErr)
+		}
+		if fresh.Name != infos[i].Name || fresh.Executable != infos[i].Executable {
+			return fmt.Errorf("%w: pid %d changed from %q to %q while waiting for confirmation; refusing to terminate", ErrKillFailed, record.PID, infos[i].Name, fresh.Name)
+		}
 		if err := manager.Terminate(ctx, record.PID); err != nil {
 			return fmt.Errorf("%w: terminate pid %d (%s): %w", ErrKillFailed, record.PID, infos[i].Name, err)
 		}

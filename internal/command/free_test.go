@@ -121,3 +121,38 @@ func TestFreePropagatesTerminationError(t *testing.T) {
 		t.Fatalf("Free() error = %v, want wrapped termination error", err)
 	}
 }
+
+// identitySwapFreeManager mirrors identitySwapManager for the free flow.
+type identitySwapFreeManager struct {
+	calls      int
+	terminated []int
+}
+
+func (m *identitySwapFreeManager) Info(_ context.Context, pid int) (model.ProcessInfo, error) {
+	m.calls++
+	if m.calls == 1 {
+		return sampleProcess(pid), nil
+	}
+	return model.ProcessInfo{PID: pid, Name: "reused.exe", Executable: `C:\reused.exe`}, nil
+}
+func (m *identitySwapFreeManager) Exists(context.Context, int) (bool, error) { return false, nil }
+func (m *identitySwapFreeManager) Terminate(_ context.Context, pid int) error {
+	m.terminated = append(m.terminated, pid)
+	return nil
+}
+
+func TestFreeAbortsWhenIdentityChanges(t *testing.T) {
+	scanner := &freeScanner{initial: []model.PortInfo{samplePort(42)}, remaining: nil}
+	manager := &identitySwapFreeManager{}
+	var out strings.Builder
+	err := Free(context.Background(), scanner, manager, 8080, strings.NewReader("y\n"), &out)
+	if !errors.Is(err, ErrKillFailed) {
+		t.Fatalf("Free() error = %v, want ErrKillFailed", err)
+	}
+	if !strings.Contains(err.Error(), "reused.exe") {
+		t.Fatalf("error = %v, want identity-change detail", err)
+	}
+	if len(manager.terminated) != 0 {
+		t.Fatalf("terminated = %v, must not terminate a reused PID", manager.terminated)
+	}
+}

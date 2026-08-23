@@ -40,6 +40,16 @@ func Kill(ctx context.Context, manager process.Manager, pid int, in io.Reader, o
 		_, _ = fmt.Fprintln(out, "Cancelled.")
 		return ErrUserCancelled
 	}
+	// The PID was resolved while the confirmation prompt was displayed. If
+	// the process died and the PID was reused in the meantime, terminating
+	// now would hit an unrelated process; re-verify the identity first.
+	fresh, recheckErr := manager.Info(ctx, pid)
+	if recheckErr != nil {
+		return fmt.Errorf("%w: re-verify pid %d before termination: %w", ErrKillFailed, pid, recheckErr)
+	}
+	if fresh.Name != info.Name || fresh.Executable != info.Executable {
+		return fmt.Errorf("%w: pid %d changed from %q to %q while waiting for confirmation; refusing to terminate", ErrKillFailed, pid, info.Name, fresh.Name)
+	}
 	if err := manager.Terminate(ctx, pid); err != nil {
 		return fmt.Errorf("%w: terminate pid %d: %w", ErrKillFailed, pid, err)
 	}
