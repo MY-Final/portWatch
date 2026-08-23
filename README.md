@@ -225,14 +225,15 @@ pw watch 8080
 
 | 方式 | 命令 |
 | --- | --- |
-| 命令行（推荐） | `pw uninstall`（或 `portwatch uninstall`，各自删除自身） |
+| 命令行（推荐） | `pw uninstall`（或 `portwatch uninstall`；同目录的另一个别名一并删除） |
 | 安装脚本 | `.\install.ps1 -Uninstall`（Windows）/ `./install.sh --uninstall`（Linux/macOS），两个别名一并清理 |
 | 手动 | 删除 `%USERPROFILE%\bin\portwatch.exe`、`pw.exe`（或 `~/.local/bin/` 下同名文件），目录清空后按需从用户 PATH 移除 |
 
 <details>
 <summary>卸载行为细节</summary>
 
-- 确认交互与 `free`/`kill` 一致：显示将要删除的路径，`y`/`yes` 确认，回车取消（退出码 0），`--yes` 跳过；
+- 确认交互与 `free`/`kill` 一致：显示将要删除的路径（含同目录的另一个别名），`y`/`yes` 确认，回车取消（退出码 0），`--yes` 跳过；
+- 同目录下的另一个别名（`portwatch` ↔ `pw`）随自身一并删除，一条命令卸载干净；正在运行而删不掉的别名会保留并由残留提示说明；
 - Windows 下运行中的 exe 无法直接删除：先改名为 `<name>.uninstalling.exe`，由分离进程在主进程退出后延迟删除；
 - PATH 清理是保守的：仅当二进制位于默认安装目录（`%USERPROFILE%\bin` / `~/.local/bin`）且删除后为空时，
   才从用户级 PATH 移除该目录，绝不触碰系统级 PATH；unix 无统一用户级 PATH 存储，只提示需从 shell 配置移除的行；

@@ -183,6 +183,55 @@ func TestUninstallLeavesNonEmptyDirectoryPathAlone(t *testing.T) {
 	}
 }
 
+func TestUninstallRemovesSiblingAliases(t *testing.T) {
+	home := t.TempDir()
+	binDir := defaultInstallDir(home)
+	executable := filepath.Join(binDir, "pw.exe")
+	writeFakeBinary(t, executable)
+	writeFakeBinary(t, filepath.Join(binDir, "portwatch.exe"))
+	recorder := installUninstallHooks(t, executable, home)
+
+	var out strings.Builder
+	if err := Uninstall(true, strings.NewReader(""), &out); err != nil {
+		t.Fatalf("Uninstall() error = %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(binDir, "portwatch.exe")); !os.IsNotExist(statErr) {
+		t.Fatalf("sibling alias still present: %v", statErr)
+	}
+	if !strings.Contains(out.String(), filepath.Join(binDir, "portwatch.exe")) {
+		t.Fatalf("output = %q, want the alias removal reported", out.String())
+	}
+	if len(recorder.cleaned) != 1 || recorder.cleaned[0] != binDir {
+		t.Fatalf("cleaned = %v, want [%s] after removing both aliases", recorder.cleaned, binDir)
+	}
+}
+
+func TestUninstallPromptListsSiblingAliases(t *testing.T) {
+	home := t.TempDir()
+	binDir := defaultInstallDir(home)
+	executable := filepath.Join(binDir, "portwatch.exe")
+	writeFakeBinary(t, executable)
+	writeFakeBinary(t, filepath.Join(binDir, "pw.exe"))
+	recorder := installUninstallHooks(t, executable, home)
+
+	var out strings.Builder
+	if err := Uninstall(false, strings.NewReader("\n"), &out); err == nil {
+		t.Fatal("cancel must return ErrUserCancelled")
+	}
+	if !strings.Contains(out.String(), "Alias: "+filepath.Join(binDir, "pw.exe")) {
+		t.Fatalf("output = %q, want the alias listed before the prompt", out.String())
+	}
+	if !strings.Contains(out.String(), "1 alias") {
+		t.Fatalf("output = %q, want the prompt to count aliases", out.String())
+	}
+	if len(recorder.cleaned) != 0 {
+		t.Fatalf("cleaned = %v, want no PATH work after cancel", recorder.cleaned)
+	}
+	if _, statErr := os.Stat(executable); statErr != nil {
+		t.Fatal("binary was deleted despite cancellation")
+	}
+}
+
 func TestUninstallLeavesNonDefaultDirectoryPathAlone(t *testing.T) {
 	home := t.TempDir()
 	otherDir := filepath.Join(home, "tools")

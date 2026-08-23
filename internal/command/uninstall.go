@@ -24,8 +24,9 @@ var (
 	cleanUserPathEntry = cleanUserPathForOS
 )
 
-// Uninstall confirms and deletes the running portwatch binary, then applies
-// the conservative PATH policy: only when the binary lived in the default
+// Uninstall confirms and deletes the running portwatch binary together with
+// the sibling alias binaries installed next to it, then applies the
+// conservative PATH policy: only when the binaries lived in the default
 // per-user install directory and that directory is now empty is the entry
 // removed from the user PATH. Any other location is left untouched.
 func Uninstall(yes bool, in io.Reader, out io.Writer) error {
@@ -36,9 +37,17 @@ func Uninstall(yes bool, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("locate running binary: %w", err)
 	}
+	aliases := siblingAliases(exePath)
 	if !yes {
 		_, _ = fmt.Fprintf(out, "Executable: %s\n", exePath)
-		_, _ = fmt.Fprintf(out, "Uninstall %s? [y/N] ", exePath)
+		for _, alias := range aliases {
+			_, _ = fmt.Fprintf(out, "Alias: %s\n", alias)
+		}
+		prompt := fmt.Sprintf("Uninstall %s", exePath)
+		if len(aliases) > 0 {
+			prompt = fmt.Sprintf("Uninstall %s and %d alias(es) in %s", filepath.Base(exePath), len(aliases), filepath.Dir(exePath))
+		}
+		_, _ = fmt.Fprintf(out, "%s? [y/N] ", prompt)
 		answer, readErr := bufio.NewReader(in).ReadString('\n')
 		if readErr != nil && !errors.Is(readErr, io.EOF) {
 			return fmt.Errorf("read confirmation: %w", readErr)
@@ -52,6 +61,14 @@ func Uninstall(yes bool, in io.Reader, out io.Writer) error {
 		return fmt.Errorf("remove %s: %w", exePath, err)
 	}
 	_, _ = fmt.Fprintf(out, "Removed %s.\n", exePath)
+	// Installers drop portwatch and pw side by side; remove the other names
+	// so one uninstall leaves nothing behind. A running alias that refuses
+	// removal simply stays and is reported by the leftover-directory note.
+	for _, alias := range aliases {
+		if err := os.Remove(alias); err == nil {
+			_, _ = fmt.Fprintf(out, "Removed %s.\n", alias)
+		}
+	}
 	return cleanInstallDirectory(filepath.Dir(exePath), out)
 }
 
@@ -88,6 +105,28 @@ func cleanInstallDirectory(dir string, out io.Writer) error {
 		return nil
 	}
 	return cleanUserPathEntry(dir, out)
+}
+
+// siblingAliases lists the other known binary names (portwatch / pw) that
+// sit next to the running executable, matching its extension style.
+func siblingAliases(exePath string) []string {
+	dir := filepath.Dir(exePath)
+	self := filepath.Base(exePath)
+	ext := ""
+	if strings.EqualFold(filepath.Ext(self), ".exe") {
+		ext = ".exe"
+	}
+	aliases := make([]string, 0, 1)
+	for _, name := range []string{"portwatch" + ext, "pw" + ext} {
+		if strings.EqualFold(name, self) {
+			continue
+		}
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			aliases = append(aliases, candidate)
+		}
+	}
+	return aliases
 }
 
 // defaultInstallDir mirrors the directories used by the install scripts.
