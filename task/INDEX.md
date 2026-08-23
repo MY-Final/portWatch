@@ -149,6 +149,6 @@ V6 交付后进入人机协作迭代：以下工作均由用户与本仓库 Agen
 backlog 002（配置文件）已于 2026-08-23 评估后 declined，结论记录在卡片内；曾短暂排期的
 Phase 11 任务卡已删除。
 
-| ID | 状态 | 文件 |
-| --- | --- | --- |
-| 1201 | planned | [`phase-12-security/1201-security-audit.md`](phase-12-security/1201-security-audit.md) |
+| ID | 状态 | 文件 | 结果 |
+| --- | --- | --- | --- |
+| 1201 | **done** | [`phase-12-security/1201-security-audit.md`](phase-12-security/1201-security-audit.md) | [`../docs/security-review.md`](../docs/security-review.md)：2 中 + 1 低已修复（PID 重用身份复核、自删除敌意路径、Exists 最小权限），3 信息级文档化，无高危 |
