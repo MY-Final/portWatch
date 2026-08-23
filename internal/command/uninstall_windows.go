@@ -19,8 +19,14 @@ import (
 
 // removeBinaryForOS cannot delete the running executable directly, so it
 // renames it out of the way first (renames of running binaries are allowed)
-// and lets a detached cmd delete the renamed file shortly after this
-// process exits.
+// and lets a detached cmd script delete the renamed file shortly after this
+// process exits. The deletion runs from a generated batch file because
+// passing a compound command with quoted paths through exec.Command mangles
+// the quotes (Go escapes them MSVCRT-style with backslashes, which cmd.exe
+// does not understand). The script waits with ping instead of timeout.exe
+// because a detached process has no console and timeout.exe fails there
+// immediately, which would make del run while this process still maps the
+// file.
 func removeBinaryForOS(path string) error {
 	dir := filepath.Dir(path)
 	name := filepath.Base(path)
@@ -31,8 +37,16 @@ func removeBinaryForOS(path string) error {
 	if err := os.Rename(path, staged); err != nil {
 		return classifyRemoveError(err)
 	}
-	delCommand := fmt.Sprintf("timeout /t 1 /nobreak >nul & del /q %s", quoteWindowsPath(staged))
-	cmd := exec.Command("cmd", "/c", delCommand)
+	script, err := os.CreateTemp(dir, "portwatch-uninstall-*.cmd")
+	if err != nil {
+		return fmt.Errorf("create uninstall script next to %s: %w", staged, err)
+	}
+	fmt.Fprintf(script, "@ping -n 2 127.0.0.1 >nul\r\n@del /q %s\r\n@del /q \"%%~f0\"\r\n", quoteWindowsPath(staged))
+	closeErr := script.Close()
+	if closeErr != nil {
+		return fmt.Errorf("write uninstall script: %w", closeErr)
+	}
+	cmd := exec.Command("cmd", "/c", script.Name())
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
 	}
