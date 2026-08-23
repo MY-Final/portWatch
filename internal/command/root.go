@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/portwatch/portwatch/internal/port"
+	"github.com/portwatch/portwatch/internal/processinfo"
 	"github.com/portwatch/portwatch/internal/service"
 	"github.com/portwatch/portwatch/internal/tui"
 	"github.com/portwatch/portwatch/pkg/model"
@@ -573,67 +573,11 @@ func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON 
 // bounded worker pool (at most 8 concurrent Info calls). Cancellation stops
 // dispatching new lookups; already-started calls are left to their context.
 func resolveProcessInfos(ctx context.Context, manager ProcessManager, records []model.PortInfo) (map[int]model.ProcessInfo, map[int]error) {
-	infos := make(map[int]model.ProcessInfo, len(records))
-	errorsByPID := make(map[int]error)
-	unique := make([]int, 0, len(records))
-	seen := make(map[int]struct{}, len(records))
-	for _, record := range records {
-		if _, known := seen[record.PID]; known {
-			continue
-		}
-		seen[record.PID] = struct{}{}
-		unique = append(unique, record.PID)
-	}
-	if len(unique) == 0 {
-		return infos, errorsByPID
-	}
-
-	workers := len(unique)
-	if workers > 8 {
-		workers = 8
-	}
-	pids := make(chan int)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for pid := range pids {
-				if ctx.Err() != nil {
-					continue
-				}
-				info, err := manager.Info(ctx, pid)
-				mu.Lock()
-				if err != nil {
-					errorsByPID[pid] = err
-				} else {
-					infos[pid] = info
-				}
-				mu.Unlock()
-			}
-		}()
-	}
-	for _, pid := range unique {
-		select {
-		case pids <- pid:
-		case <-ctx.Done():
-			close(pids)
-			wg.Wait()
-			return infos, errorsByPID
-		}
-	}
-	close(pids)
-	wg.Wait()
-	return infos, errorsByPID
+	return processinfo.Resolve(ctx, manager, records)
 }
 
 func applyProcessNames(records []model.PortInfo, infos map[int]model.ProcessInfo) {
-	for i := range records {
-		if info, ok := infos[records[i].PID]; ok {
-			records[i].ProcessName = info.Name
-		}
-	}
+	processinfo.ApplyNames(records, infos)
 }
 
 func reportProcessInfoErrors(stderr io.Writer, errorsByPID map[int]error) {

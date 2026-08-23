@@ -14,6 +14,7 @@ import (
 
 	"github.com/portwatch/portwatch/internal/port"
 	"github.com/portwatch/portwatch/internal/process"
+	"github.com/portwatch/portwatch/internal/processinfo"
 	"github.com/portwatch/portwatch/pkg/model"
 )
 
@@ -109,24 +110,15 @@ func (m Model) refresh() tea.Cmd {
 		}
 		infos := make(map[int]model.ProcessInfo, len(ports))
 		infoErrors := make(map[int]error)
-		for i := range ports {
-			if m.Manager == nil || ports[i].PID <= 0 {
-				continue
+		if m.Manager != nil {
+			resolvable := make([]model.PortInfo, 0, len(ports))
+			for _, record := range ports {
+				if record.PID > 0 {
+					resolvable = append(resolvable, record)
+				}
 			}
-			if info, ok := infos[ports[i].PID]; ok {
-				ports[i].ProcessName = info.Name
-				continue
-			}
-			if _, ok := infoErrors[ports[i].PID]; ok {
-				continue
-			}
-			info, infoErr := m.Manager.Info(ctx, ports[i].PID)
-			if infoErr != nil {
-				infoErrors[ports[i].PID] = infoErr
-				continue
-			}
-			infos[ports[i].PID] = info
-			ports[i].ProcessName = info.Name
+			infos, infoErrors = processinfo.Resolve(ctx, m.Manager, resolvable)
+			processinfo.ApplyNames(ports, infos)
 		}
 		return portsLoadedMsg{
 			ports: ports, infos: infos, lookupErrors: infoErrors,
