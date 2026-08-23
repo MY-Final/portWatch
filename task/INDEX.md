@@ -142,18 +142,12 @@ V6 交付后进入人机协作迭代：以下工作均由用户与本仓库 Agen
 - `backlog/001-udp.md`：已由 v0.8.0 完成全部三平台实现，卡片已标记 done。
 - `backlog/002-config.md`、`backlog/003-security-review.md`：仍为候选，未调度。
 
-## Phase 11: Configuration（已排期）
-
-来源 `backlog/002-config.md`，目标 v0.9.0。串行执行 `1101 -> 1102`。
-
-| ID | 状态 | 文件 |
-| --- | --- | --- |
-| 1101 | planned | [`phase-11-config/1101-config-discovery-and-load.md`](phase-11-config/1101-config-discovery-and-load.md) |
-| 1102 | planned | [`phase-11-config/1102-config-defaults-wiring.md`](phase-11-config/1102-config-defaults-wiring.md) |
-
 ## Phase 12: Security Review（已排期）
 
-来源 `backlog/003-security-review.md`，范围按 PEB/卸载/安装脚本现状重写，可与 Phase 11 并行。
+来源 `backlog/003-security-review.md`，范围按 PEB/卸载/安装脚本现状重写。
+
+backlog 002（配置文件）已于 2026-08-23 评估后 declined，结论记录在卡片内；曾短暂排期的
+Phase 11 任务卡已删除。
 
 | ID | 状态 | 文件 |
 | --- | --- | --- |
