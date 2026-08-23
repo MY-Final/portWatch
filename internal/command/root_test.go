@@ -6,7 +6,9 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/portwatch/portwatch/pkg/model"
 )
@@ -389,3 +391,106 @@ func (failingInfoManager) Info(context.Context, int) (model.ProcessInfo, error) 
 }
 func (failingInfoManager) Exists(context.Context, int) (bool, error) { return false, nil }
 func (failingInfoManager) Terminate(context.Context, int) error      { return nil }
+
+func TestReportProcessInfoErrorsIsDeterministic(t *testing.T) {
+	errorsByPID := map[int]error{
+		5:  errors.New("failure for pid five"),
+		2:  errors.New("failure for pid two"),
+		9:  errors.New("failure for pid nine"),
+		20: errors.New("failure for pid twenty"),
+	}
+	var out strings.Builder
+	for i := 0; i < 100; i++ {
+		out.Reset()
+		reportProcessInfoErrors(&out, errorsByPID)
+		got := out.String()
+		if !strings.Contains(got, "failure for pid two") {
+			t.Fatalf("reportProcessInfoErrors() = %q, want lowest-PID error", got)
+		}
+		for _, unexpected := range []string{"pid five", "pid nine", "pid twenty"} {
+			if strings.Contains(got, unexpected) {
+				t.Fatalf("reportProcessInfoErrors() = %q, must not surface %q", got, unexpected)
+			}
+		}
+	}
+}
+
+type countingPerPIDManager struct {
+	mu    sync.Mutex
+	calls map[int]int
+}
+
+func (m *countingPerPIDManager) Info(_ context.Context, pid int) (model.ProcessInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls[pid]++
+	return model.ProcessInfo{PID: pid, Name: "proc"}, nil
+}
+func (m *countingPerPIDManager) Exists(context.Context, int) (bool, error) { return false, nil }
+func (m *countingPerPIDManager) Terminate(context.Context, int) error      { return nil }
+
+func TestResolveProcessInfosQueriesEachPIDOnce(t *testing.T) {
+	manager := &countingPerPIDManager{calls: map[int]int{}}
+	records := []model.PortInfo{
+		{Port: 80, PID: 11}, {Port: 443, PID: 22}, {Port: 8080, PID: 11},
+		{Port: 3000, PID: 33}, {Port: 3001, PID: 22},
+	}
+	infos, errorsByPID := resolveProcessInfos(context.Background(), manager, records)
+	for _, pid := range []int{11, 22, 33} {
+		if manager.calls[pid] != 1 {
+			t.Fatalf("Info() calls for pid %d = %d, want exactly 1", pid, manager.calls[pid])
+		}
+		info, ok := infos[pid]
+		if !ok || info.PID != pid || info.Name != "proc" {
+			t.Fatalf("infos[%d] = %+v, ok=%v", pid, info, ok)
+		}
+	}
+	if len(errorsByPID) != 0 {
+		t.Fatalf("errorsByPID = %v, want none", errorsByPID)
+	}
+}
+
+// barrierInfoManager blocks each Info call until the test observes two
+// concurrent calls, proving resolveProcessInfos actually runs in parallel.
+type barrierInfoManager struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (m *barrierInfoManager) Info(_ context.Context, pid int) (model.ProcessInfo, error) {
+	m.entered <- struct{}{}
+	<-m.release
+	return model.ProcessInfo{PID: pid, Name: "proc"}, nil
+}
+func (m *barrierInfoManager) Exists(context.Context, int) (bool, error) { return false, nil }
+func (m *barrierInfoManager) Terminate(context.Context, int) error      { return nil }
+
+func TestResolveProcessInfosRunsConcurrently(t *testing.T) {
+	manager := &barrierInfoManager{entered: make(chan struct{}), release: make(chan struct{})}
+	records := []model.PortInfo{{Port: 1, PID: 101}, {Port: 2, PID: 102}}
+	type result struct {
+		infos       map[int]model.ProcessInfo
+		errorsByPID map[int]error
+	}
+	done := make(chan result, 1)
+	go func() {
+		infos, errorsByPID := resolveProcessInfos(context.Background(), manager, records)
+		done <- result{infos: infos, errorsByPID: errorsByPID}
+	}()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-manager.entered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("second concurrent Info call never started; resolveProcessInfos appears serial")
+		}
+	}
+	close(manager.release)
+	select {
+	case got := <-done:
+		if len(got.infos) != 2 || len(got.errorsByPID) != 0 {
+			t.Fatalf("infos=%v errors=%v", got.infos, got.errorsByPID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("resolveProcessInfos did not finish after release")
+	}
+}

@@ -236,6 +236,19 @@ func TestV6ListExplainsPrimaryWorkflow(t *testing.T) {
 	}
 }
 
+func TestVersionIsInjectedNotHardcoded(t *testing.T) {
+	m := NewWithPort(nil, nil, 8080)
+	if m.Version != "" {
+		t.Fatalf("NewWithPort() hardcoded Version = %q, want empty until caller injects", m.Version)
+	}
+	m.Version = "9.9.9"
+	var b strings.Builder
+	m.writeHeader(&b)
+	if !strings.Contains(b.String(), "v9.9.9") {
+		t.Fatalf("header missing injected version: %s", b.String())
+	}
+}
+
 func TestSelectionCursorAndSummaryMoveTogether(t *testing.T) {
 	m := Model{Ports: []model.PortInfo{
 		{Port: 3000, PID: 11, ProcessName: "node.exe"},

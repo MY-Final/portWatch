@@ -76,6 +76,10 @@ func errorMessage(err error) string {
 	if errors.As(err, &parseErr) {
 		return cleanMessage(parseErr.Error())
 	}
+	var protoErr protocolUnsupportedError
+	if errors.As(err, &protoErr) {
+		return cleanMessage(protoErr.Error())
+	}
 	switch {
 	case errors.Is(err, context.Canceled):
 		return "operation cancelled"

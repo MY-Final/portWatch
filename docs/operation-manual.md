@@ -72,7 +72,7 @@ portwatch free 8080   # 3. 释放端口，输入 y 确认
 | `portwatch --pid 1234` | 只看指定 PID 的端口 |
 | `portwatch --state LISTENING` | 按连接状态筛选 |
 
-**注意**：全局选项（如 `--json`、`--protocol`）必须放在位置参数或子命令之前，写 `portwatch --json 8080`，不要写 `portwatch 8080 --json`。
+**注意**：全局选项（如 `--json`、`--protocol`）与位置参数可以任意交错（GNU 风格），`portwatch --json 8080` 和 `portwatch 8080 --json` 等价；`--ports 3000` 与 `--ports=3000` 两种写法也都支持。
 
 ---
 
@@ -192,7 +192,7 @@ Linux/macOS 的实现已包含在代码中，但建议在目标系统上单独�
 用管理员身份重新打开 PowerShell。
 
 **Q：`--json` 放在端口后面没生效？**
-全局选项必须放在位置参数或子命令之前：`portwatch --json 8080`。
+不会出现这种情况：选项和位置参数可以任意交错，`portwatch 8080 --json` 与 `portwatch --json 8080` 等价。如果确认没生效，请升级到 v0.7.0 以上版本。
 
 **Q：TUI 里方向键不能用？**
 使用备用键位：`u` 上移、`j` 下移。

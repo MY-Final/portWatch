@@ -71,7 +71,6 @@ func NewWithPort(scanner port.Scanner, manager process.Manager, portFilter int) 
 		Context:       context.Background(),
 		Scanner:       scanner,
 		Manager:       manager,
-		Version:       "0.5.0",
 		Scope:         port.ScopeListening,
 		ViewSelection: port.ScopeListening,
 		Page:          pageList,
@@ -528,22 +527,26 @@ func display(value string) string {
 	return value
 }
 
-func Run(ctx context.Context, scanner port.Scanner, manager process.Manager) error {
-	return RunPort(ctx, scanner, manager, 0)
+// Run starts the TUI with the caller-supplied version shown in the header.
+func Run(ctx context.Context, scanner port.Scanner, manager process.Manager, version string) error {
+	return RunPort(ctx, scanner, manager, 0, version)
 }
 
-// RunPort starts the TUI, optionally focused on one listening port.
-func RunPort(ctx context.Context, scanner port.Scanner, manager process.Manager, portFilter int) error {
-	return runProgramWithPort(ctx, scanner, manager, portFilter, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
+// RunPort starts the TUI, optionally focused on one listening port. The
+// version is injected by the caller so the header always matches the CLI
+// --version output.
+func RunPort(ctx context.Context, scanner port.Scanner, manager process.Manager, portFilter int, version string) error {
+	return runProgramWithPort(ctx, scanner, manager, portFilter, version, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
 }
 
 func runProgram(ctx context.Context, scanner port.Scanner, manager process.Manager, options ...tea.ProgramOption) error {
-	return runProgramWithPort(ctx, scanner, manager, 0, options...)
+	return runProgramWithPort(ctx, scanner, manager, 0, "", options...)
 }
 
-func runProgramWithPort(ctx context.Context, scanner port.Scanner, manager process.Manager, portFilter int, options ...tea.ProgramOption) error {
+func runProgramWithPort(ctx context.Context, scanner port.Scanner, manager process.Manager, portFilter int, version string, options ...tea.ProgramOption) error {
 	model := NewWithPort(scanner, manager, portFilter)
 	model.Context = ctx
+	model.Version = version
 	programOptions := append([]tea.ProgramOption{tea.WithContext(ctx)}, options...)
 	program := tea.NewProgram(model, programOptions...)
 	_, err := program.Run()

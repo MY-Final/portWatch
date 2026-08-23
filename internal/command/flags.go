@@ -60,14 +60,54 @@ func parseFlags(args []string) (flagOptions, []string, error) {
 	set.BoolVar(&options.Version, "version", false, "show version")
 	set.BoolVar(&options.JSON, "json", false, "output JSON")
 	set.DurationVar(&options.Interval, "interval", time.Second, "watch interval")
-	if err := set.Parse(args); err != nil {
+	flagArgs, positional := intersperseFlags(set, args)
+	if err := set.Parse(flagArgs); err != nil {
 		return flagOptions{}, nil, fmt.Errorf("parse flags: %w", err)
 	}
 	options.Protocol = strings.ToLower(options.Protocol)
 	if options.Protocol != "tcp" && options.Protocol != "udp" && options.Protocol != "all" {
 		return flagOptions{}, nil, fmt.Errorf("unsupported protocol %q", options.Protocol)
 	}
-	return options, set.Args(), nil
+	return options, positional, nil
+}
+
+// intersperseFlags reorders args into flag tokens (with their values) and
+// positional arguments so options and positionals can mix in GNU style, for
+// example "portwatch 8080 --json" or "portwatch find node --json". A "--"
+// terminator still marks everything after it as positional.
+func intersperseFlags(set *flag.FlagSet, args []string) (flags []string, positional []string) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			positional = append(positional, args[i+1:]...)
+			break
+		}
+		if len(arg) > 1 && arg[0] == '-' {
+			name := strings.TrimLeft(arg, "-")
+			hasValue := false
+			if eq := strings.IndexByte(name, '='); eq >= 0 {
+				name = name[:eq]
+				hasValue = true
+			}
+			flags = append(flags, arg)
+			if f := set.Lookup(name); f != nil && !isBoolFlag(f) && !hasValue && i+1 < len(args) {
+				i++
+				flags = append(flags, args[i])
+			}
+			continue
+		}
+		positional = append(positional, arg)
+	}
+	return flags, positional
+}
+
+// isBoolFlag reports whether the flag never consumes a following value token,
+// using the same unexported marker the flag package checks internally.
+func isBoolFlag(f *flag.Flag) bool {
+	if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok {
+		return bf.IsBoolFlag()
+	}
+	return false
 }
 
 func (o flagOptions) queryFilter() (QueryFilter, error) {

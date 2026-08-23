@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/portwatch/portwatch/internal/port"
 	"github.com/portwatch/portwatch/internal/service"
@@ -135,23 +137,23 @@ func Parse(args []string) (Command, error) {
 		return Command{Action: ActionPort, Port: port, Flags: options}, nil
 	case 2:
 		if positional[0] == "tui" {
-			port, err := strconv.Atoi(positional[1])
-			if err != nil || port < 1 || port > 65535 {
-				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: positional[1], Message: "port must be a number from 1 to 65535"}
+			port, parseErr := parsePortArg(positional[1])
+			if parseErr != nil {
+				return Command{}, parseErr
 			}
 			return Command{Action: ActionTUI, Port: port, Flags: options}, nil
 		}
 		if positional[0] == "watch" {
-			port, err := strconv.Atoi(positional[1])
-			if err != nil || port < 1 || port > 65535 {
-				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: positional[1], Message: "port must be a number from 1 to 65535"}
+			port, parseErr := parsePortArg(positional[1])
+			if parseErr != nil {
+				return Command{}, parseErr
 			}
 			return Command{Action: ActionWatch, Port: port, Flags: options}, nil
 		}
 		if positional[0] == "free" {
-			port, err := strconv.Atoi(positional[1])
-			if err != nil || port < 1 || port > 65535 {
-				return Command{}, &ParseError{Kind: ParseErrorInvalidPort, Argument: positional[1], Message: "port must be a number from 1 to 65535"}
+			port, parseErr := parsePortArg(positional[1])
+			if parseErr != nil {
+				return Command{}, parseErr
 			}
 			return Command{Action: ActionFree, Port: port, Flags: options}, nil
 		}
@@ -171,6 +173,16 @@ func Parse(args []string) (Command, error) {
 		}
 	}
 	return Command{}, &ParseError{Kind: ParseErrorUnknownCommand, Argument: positional[0], Message: "unknown command or arguments"}
+}
+
+// parsePortArg validates the positional port argument shared by the tui,
+// watch and free subcommands.
+func parsePortArg(arg string) (int, *ParseError) {
+	port, err := strconv.Atoi(arg)
+	if err != nil || port < 1 || port > 65535 {
+		return 0, &ParseError{Kind: ParseErrorInvalidPort, Argument: arg, Message: "port must be a number from 1 to 65535"}
+	}
+	return port, nil
 }
 
 // ParseErrorKind identifies the reason a root argument list was rejected.
@@ -334,7 +346,7 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 		}
 		return ExitCode(err)
 	case ActionTUI:
-		err := tui.RunPort(ctx, deps.Scanner, deps.Manager, command.Port)
+		err := tui.RunPort(ctx, deps.Scanner, deps.Manager, command.Port, Version)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			PrintError(stderr, err)
 		}
@@ -359,13 +371,29 @@ func (s protocolScannerAdapter) Port(ctx context.Context, number int) ([]model.P
 	return s.scanner.PortProtocol(ctx, number, s.protocol)
 }
 
+// protocolUnsupportedError explains that the selected --protocol value is a
+// Windows-only capability and names the current platform, instead of the
+// generic platform message.
+type protocolUnsupportedError struct {
+	protocol string
+	goos     string
+}
+
+func (e protocolUnsupportedError) Error() string {
+	return fmt.Sprintf("operation is not supported on this platform: only Windows supports --protocol %s; current platform is %s", e.protocol, e.goos)
+}
+
+// Unwrap keeps exit-code mapping and errors.Is checks aligned with the plain
+// port.ErrUnsupported sentinel.
+func (e protocolUnsupportedError) Unwrap() error { return port.ErrUnsupported }
+
 func scannerForProtocol(scanner PortScanner, protocol string) (PortScanner, error) {
 	if protocol == "tcp" {
 		return scanner, nil
 	}
 	protocolScanner, ok := scanner.(port.ProtocolScanner)
 	if !ok {
-		return nil, port.ErrUnsupported
+		return nil, protocolUnsupportedError{protocol: protocol, goos: runtime.GOOS}
 	}
 	return protocolScannerAdapter{scanner: protocolScanner, protocol: protocol}, nil
 }
@@ -434,15 +462,7 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 		return ExitCode(err)
 	}
 	if len(ports) == 0 {
-		if asJSON {
-			if renderErr := RenderJSONWithServices(stdout, nil, nil, service.Rules{}); renderErr != nil {
-				PrintError(stderr, renderErr)
-				return ExitCode(renderErr)
-			}
-			return ExitSuccess
-		}
-		_, _ = fmt.Fprintf(stdout, "Port %d is available.\n", portNumber)
-		return ExitSuccess
+		return renderEmptyPortResult(stdout, stderr, portNumber, asJSON)
 	}
 	ports, infos, infoErrors := filterPorts(ctx, deps.Manager, ports, filter)
 	if len(infoErrors) > 0 {
@@ -457,15 +477,7 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 		}
 	}
 	if len(ports) == 0 {
-		if asJSON {
-			if renderErr := RenderJSONWithServices(stdout, nil, nil, service.Rules{}); renderErr != nil {
-				PrintError(stderr, renderErr)
-				return ExitCode(renderErr)
-			}
-			return ExitSuccess
-		}
-		_, _ = fmt.Fprintf(stdout, "Port %d is available.\n", portNumber)
-		return ExitSuccess
+		return renderEmptyPortResult(stdout, stderr, portNumber, asJSON)
 	}
 	if asJSON {
 		if renderErr := RenderJSONWithServices(stdout, ports, infos, service.Rules{}); renderErr != nil {
@@ -480,6 +492,20 @@ func runPort(ctx context.Context, deps Dependencies, portNumber int, asJSON bool
 			}
 		}
 	}
+	return ExitSuccess
+}
+
+// renderEmptyPortResult reports an unoccupied port identically for the text
+// and JSON outputs, both before and after process filtering.
+func renderEmptyPortResult(stdout, stderr io.Writer, portNumber int, asJSON bool) int {
+	if asJSON {
+		if renderErr := RenderJSONWithServices(stdout, nil, nil, service.Rules{}); renderErr != nil {
+			PrintError(stderr, renderErr)
+			return ExitCode(renderErr)
+		}
+		return ExitSuccess
+	}
+	_, _ = fmt.Fprintf(stdout, "Port %d is available.\n", portNumber)
 	return ExitSuccess
 }
 
@@ -543,23 +569,62 @@ func runPortSet(ctx context.Context, deps Dependencies, requested []int, asJSON 
 	return ExitSuccess
 }
 
+// resolveProcessInfos looks up process metadata once per unique PID using a
+// bounded worker pool (at most 8 concurrent Info calls). Cancellation stops
+// dispatching new lookups; already-started calls are left to their context.
 func resolveProcessInfos(ctx context.Context, manager ProcessManager, records []model.PortInfo) (map[int]model.ProcessInfo, map[int]error) {
 	infos := make(map[int]model.ProcessInfo, len(records))
 	errorsByPID := make(map[int]error)
+	unique := make([]int, 0, len(records))
+	seen := make(map[int]struct{}, len(records))
 	for _, record := range records {
-		if _, known := infos[record.PID]; known {
+		if _, known := seen[record.PID]; known {
 			continue
 		}
-		if _, known := errorsByPID[record.PID]; known {
-			continue
-		}
-		info, err := manager.Info(ctx, record.PID)
-		if err != nil {
-			errorsByPID[record.PID] = err
-			continue
-		}
-		infos[record.PID] = info
+		seen[record.PID] = struct{}{}
+		unique = append(unique, record.PID)
 	}
+	if len(unique) == 0 {
+		return infos, errorsByPID
+	}
+
+	workers := len(unique)
+	if workers > 8 {
+		workers = 8
+	}
+	pids := make(chan int)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for pid := range pids {
+				if ctx.Err() != nil {
+					continue
+				}
+				info, err := manager.Info(ctx, pid)
+				mu.Lock()
+				if err != nil {
+					errorsByPID[pid] = err
+				} else {
+					infos[pid] = info
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+	for _, pid := range unique {
+		select {
+		case pids <- pid:
+		case <-ctx.Done():
+			close(pids)
+			wg.Wait()
+			return infos, errorsByPID
+		}
+	}
+	close(pids)
+	wg.Wait()
 	return infos, errorsByPID
 }
 
@@ -575,10 +640,12 @@ func reportProcessInfoErrors(stderr io.Writer, errorsByPID map[int]error) {
 	if len(errorsByPID) == 0 {
 		return
 	}
-	var first error
-	for _, err := range errorsByPID {
-		first = err
-		break
+	// Map iteration order is randomized; pick the lowest PID's error so the
+	// same input always produces the same stderr line.
+	pids := make([]int, 0, len(errorsByPID))
+	for pid := range errorsByPID {
+		pids = append(pids, pid)
 	}
-	PrintError(stderr, fmt.Errorf("process information unavailable for %d PID(s): %w", len(errorsByPID), first))
+	sort.Ints(pids)
+	PrintError(stderr, fmt.Errorf("process information unavailable for %d PID(s): %w", len(errorsByPID), errorsByPID[pids[0]]))
 }

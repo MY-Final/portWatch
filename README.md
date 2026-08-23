@@ -167,8 +167,9 @@ Listening/Connections/All，`?` 查看完整帮助，`Q` 退出。终止后 Port
 | `4` | 权限不足 |
 | `5` | Kill 失败、关键 PID 拒绝或 Kill 后验证失败 |
 
-所有全局选项应放在位置参数或子命令之前，例如使用
-`portwatch --json 8080`，不要写成 `portwatch 8080 --json`。
+全局选项与位置参数可以任意交错（GNU 风格）：`portwatch --json 8080`、
+`portwatch 8080 --json` 和 `portwatch find node --json` 均合法。
+`--flag value` 与 `--flag=value` 两种写法也都支持。
 
 ## 平台说明
 
@@ -177,7 +178,17 @@ Windows 使用 IP Helper API 扫描 IPv4/IPv6 TCP 监听端口，并通过 Windo
 不依赖 PowerShell/WMI 等外部进程。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
 这两个平台的实现已包含在代码中，但建议在目标系统上单独验证权限和命令可用性。
 
-Windows CLI 支持 TCP 监听端口和 UDP 绑定端口，`--protocol` 可选 `tcp`、`udp` 或 `all`；Linux/macOS 当前只实现 TCP，使用 UDP 时会返回明确的不支持错误。TUI 可以通过 `portwatch tui` 或 `portwatch tui 8080` 显式启动，并默认进入 TCP `LISTENING` 视图；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
+Windows CLI 支持 TCP 监听端口和 UDP 绑定端口，`--protocol` 可选 `tcp`、`udp` 或 `all`；Linux/macOS 当前只实现 TCP，使用 UDP 时会返回明确的不支持错误，错误文案会注明"仅 Windows 支持该协议，当前平台为 <os>"。TUI 可以通过 `portwatch tui` 或 `portwatch tui 8080` 显式启动，并默认进入 TCP `LISTENING` 视图；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
+
+### 能力矩阵
+
+| 能力 | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| TCP 监听端口 | ✓ | ✓ | ✓（依赖 `lsof`） |
+| TCP 连接（非 LISTENING 状态） | ✓ | ✗ | ✗ |
+| UDP 绑定端口 | ✓ | ✗ | ✗ |
+| 进程命令行 | ✓（直读 PEB） | ✓（`/proc/<pid>/cmdline`） | ✓（依赖 `ps`） |
+| 进程工作目录 | ✓（直读 PEB） | ✗ | ✗ |
 
 ## 开发
 
