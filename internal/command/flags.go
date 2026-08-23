@@ -10,7 +10,7 @@ import (
 )
 
 // Version is overridden by the release build through main.version.
-var Version = "0.7.0"
+var Version = "0.8.0"
 
 // BinaryName is the name portwatch was invoked as, so a copy or link named
 // pw.exe prints pw in usage and error prefixes. main sets it from argv[0].

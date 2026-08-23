@@ -29,25 +29,77 @@ func (LinuxScanner) List(ctx context.Context) ([]model.PortInfo, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return listProcNet(procRoot, os.ReadDir)
+	return listProcNet(procRoot, os.ReadDir, "tcp")
 }
 
-// listProcNet parses net/tcp and net/tcp6 under root. The socket inode map
-// is built once for both tables instead of once per listening row, so the
-// whole /proc fd tree is traversed a single time per call. readDir is
-// injected so tests can count traversals on a fake root.
-func listProcNet(root string, readDir func(string) ([]os.DirEntry, error)) ([]model.PortInfo, error) {
-	inodePIDs := buildInodePIDMap(root, readDir)
-	rows := make([]model.PortInfo, 0)
-	for _, name := range []string{"net/tcp", "net/tcp6"} {
-		parsed, err := parseProcTCP(filepath.Join(root, name), inodePIDs)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
+// ListProtocol serves the --protocol flag: tcp, udp or all.
+func (LinuxScanner) ListProtocol(ctx context.Context, protocol string) ([]model.PortInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch protocol {
+	case "tcp", "udp":
+		return listProcNet(procRoot, os.ReadDir, protocol)
+	case "all":
+		tcp, err := listProcNet(procRoot, os.ReadDir, "tcp")
+		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, parsed...)
+		udp, err := listProcNet(procRoot, os.ReadDir, "udp")
+		if err != nil {
+			return nil, err
+		}
+		return append(tcp, udp...), nil
+	default:
+		return nil, fmt.Errorf("%w: protocol %q", ErrUnsupported, protocol)
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Port < rows[j].Port })
-	return rows, nil
+}
+
+func (s LinuxScanner) PortProtocol(ctx context.Context, number int, protocol string) ([]model.PortInfo, error) {
+	if number < 1 || number > 65535 {
+		return nil, ErrInvalidPort
+	}
+	rows, err := s.ListProtocol(ctx, protocol)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]model.PortInfo, 0)
+	for _, row := range rows {
+		if row.Port == number {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered, nil
+}
+
+// ListScope returns the TCP records needed by the interactive TUI, mirroring
+// the Windows semantics: Listening keeps the CLI contract, Connections and
+// All read every state from /proc/net/tcp{,6}.
+func (s LinuxScanner) ListScope(ctx context.Context, scope Scope) ([]model.PortInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scope {
+	case ScopeListening:
+		return s.List(ctx)
+	case ScopeConnections, ScopeAll:
+		rows, err := listProcNetAllStates(procRoot, os.ReadDir)
+		if err != nil {
+			return nil, err
+		}
+		if scope == ScopeConnections {
+			filtered := rows[:0]
+			for _, row := range rows {
+				if row.State != "LISTENING" {
+					filtered = append(filtered, row)
+				}
+			}
+			rows = filtered
+		}
+		return rows, nil
+	default:
+		return nil, ErrScopeUnsupported
+	}
 }
 
 func (s LinuxScanner) Port(ctx context.Context, number int) ([]model.PortInfo, error) {
@@ -67,7 +119,69 @@ func (s LinuxScanner) Port(ctx context.Context, number int) ([]model.PortInfo, e
 	return filtered, nil
 }
 
-func parseProcTCP(path string, inodePIDs map[string]int) ([]model.PortInfo, error) {
+// listProcNet parses the tcp or udp tables under root. The socket inode map
+// is built once for both tables of the protocol instead of once per row, so
+// the whole /proc fd tree is traversed a single time per call. readDir is
+// injected so tests can count traversals on a fake root.
+func listProcNet(root string, readDir func(string) ([]os.DirEntry, error), protocol string) ([]model.PortInfo, error) {
+	inodePIDs := buildInodePIDMap(root, readDir)
+	rows := make([]model.PortInfo, 0)
+	for _, name := range procTables(protocol) {
+		parsed, err := parseProcTable(filepath.Join(root, name), inodePIDs, protocol)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		rows = append(rows, parsed...)
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Port < rows[j].Port })
+	return rows, nil
+}
+
+// listProcNetAllStates parses the TCP tables keeping every state, for the
+// TUI Connections and All views.
+func listProcNetAllStates(root string, readDir func(string) ([]os.DirEntry, error)) ([]model.PortInfo, error) {
+	inodePIDs := buildInodePIDMap(root, readDir)
+	rows := make([]model.PortInfo, 0)
+	for _, name := range []string{"net/tcp", "net/tcp6"} {
+		parsed, err := parseProcTCP(filepath.Join(root, name), inodePIDs, true)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		rows = append(rows, parsed...)
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Port < rows[j].Port })
+	return rows, nil
+}
+
+func procTables(protocol string) []string {
+	if protocol == "udp" {
+		return []string{"net/udp", "net/udp6"}
+	}
+	return []string{"net/tcp", "net/tcp6"}
+}
+
+// parseProcTable dispatches to the per-protocol row parser; both table
+// families share the same column layout.
+func parseProcTable(path string, inodePIDs map[string]int, protocol string) ([]model.PortInfo, error) {
+	if protocol == "udp" {
+		return parseProcRows(path, inodePIDs, parseUDPRow)
+	}
+	return parseProcRows(path, inodePIDs, parseTCPListenerRow)
+}
+
+// parseProcTCP parses one TCP table with an explicit all-states switch.
+func parseProcTCP(path string, inodePIDs map[string]int, includeAllStates bool) ([]model.PortInfo, error) {
+	if includeAllStates {
+		return parseProcRows(path, inodePIDs, parseAnyTCPRow)
+	}
+	return parseProcRows(path, inodePIDs, parseTCPListenerRow)
+}
+
+// procRowParser turns one /proc/net table line into a record; keep=false
+// drops the row without an error.
+type procRowParser func(fields []string, inodePIDs map[string]int) (model.PortInfo, bool, error)
+
+func parseProcRows(path string, inodePIDs map[string]int, parse procRowParser) ([]model.PortInfo, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -78,22 +192,97 @@ func parseProcTCP(path string, inodePIDs map[string]int) ([]model.PortInfo, erro
 	scanner.Scan()
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
-		if len(fields) < 10 || fields[3] != "0A" {
+		if len(fields) < 10 {
 			continue
 		}
-		address, port, err := parseProcAddress(fields[1])
-		if err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
+		row, keep, parseErr := parse(fields, inodePIDs)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse %s: %w", path, parseErr)
 		}
-		rows = append(rows, model.PortInfo{Port: port, Protocol: "TCP", LocalAddr: address, State: "LISTENING", PID: findSocketPID(fields[9], inodePIDs)})
+		if keep {
+			rows = append(rows, row)
+		}
 	}
 	return rows, scanner.Err()
 }
 
-// findSocketPID returns the PID that owns the socket inode, or 0 when the
-// inode is absent from the map (unreadable fd or exited process).
-func findSocketPID(inode string, inodePIDs map[string]int) int {
-	return inodePIDs[inode]
+// parseTCPListenerRow keeps LISTENING rows only, preserving the default
+// List contract.
+func parseTCPListenerRow(fields []string, inodePIDs map[string]int) (model.PortInfo, bool, error) {
+	if fields[3] != "0A" {
+		return model.PortInfo{}, false, nil
+	}
+	row, err := tcpRow(fields, inodePIDs, "LISTENING")
+	if err != nil {
+		return model.PortInfo{}, false, err
+	}
+	return row, true, nil
+}
+
+// parseAnyTCPRow keeps every row and maps the hex state code to the same
+// state names the Windows scanner reports.
+func parseAnyTCPRow(fields []string, inodePIDs map[string]int) (model.PortInfo, bool, error) {
+	state, ok := tcpStateNames[fields[3]]
+	if !ok {
+		state = "UNKNOWN"
+	}
+	row, err := tcpRow(fields, inodePIDs, state)
+	if err != nil {
+		return model.PortInfo{}, false, err
+	}
+	return row, true, nil
+}
+
+func tcpRow(fields []string, inodePIDs map[string]int, state string) (model.PortInfo, error) {
+	address, port, err := parseProcAddress(fields[1])
+	if err != nil {
+		return model.PortInfo{}, err
+	}
+	remote, _, err := parseProcAddress(fields[2])
+	if err != nil {
+		return model.PortInfo{}, err
+	}
+	return model.PortInfo{
+		Port:       port,
+		Protocol:   "TCP",
+		LocalAddr:  address,
+		RemoteAddr: remote,
+		State:      state,
+		PID:        inodePIDs[fields[9]],
+	}, nil
+}
+
+// parseUDPRow mirrors the Windows UDP view: State is BOUND because /proc
+// UDP sockets have no connection state.
+func parseUDPRow(fields []string, inodePIDs map[string]int) (model.PortInfo, bool, error) {
+	address, port, err := parseProcAddress(fields[1])
+	if err != nil {
+		return model.PortInfo{}, false, err
+	}
+	return model.PortInfo{
+		Port:      port,
+		Protocol:  "UDP",
+		LocalAddr: address,
+		State:     "BOUND",
+		PID:       inodePIDs[fields[9]],
+	}, true, nil
+}
+
+// tcpStateNames maps the /proc/net/tcp hex state codes to the state strings
+// used across platforms.
+var tcpStateNames = map[string]string{
+	"01": "ESTABLISHED",
+	"02": "SYN_SENT",
+	"03": "SYN_RECV",
+	"04": "FIN_WAIT1",
+	"05": "FIN_WAIT2",
+	"06": "TIME_WAIT",
+	"07": "CLOSE",
+	"08": "CLOSE_WAIT",
+	"09": "LAST_ACK",
+	"0A": "LISTENING",
+	"0B": "CLOSING",
+	"0C": "NEW_SYN_RECV",
 }
 
 // buildInodePIDMap walks the pid directories under root once and maps every

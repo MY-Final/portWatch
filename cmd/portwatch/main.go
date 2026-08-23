@@ -12,7 +12,7 @@ import (
 	"github.com/MY-Final/portWatch/internal/process"
 )
 
-var version = "0.7.0"
+var version = "0.8.0"
 
 func main() {
 	command.Version = version

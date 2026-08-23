@@ -423,7 +423,7 @@ type protocolUnsupportedError struct {
 }
 
 func (e protocolUnsupportedError) Error() string {
-	return fmt.Sprintf("operation is not supported on this platform: only Windows supports --protocol %s; current platform is %s", e.protocol, e.goos)
+	return fmt.Sprintf("operation is not supported on this platform: --protocol %s is not supported on %s", e.protocol, e.goos)
 }
 
 // Unwrap keeps exit-code mapping and errors.Is checks aligned with the plain

@@ -36,11 +36,21 @@ func (LinuxManager) Info(_ context.Context, pid int) (model.ProcessInfo, error) 
 	if err != nil {
 		return model.ProcessInfo{}, mapLinuxError(err)
 	}
-	info, err := model.NewProcessInfo(pid, strings.TrimSpace(string(name)), executable, strings.ReplaceAll(string(command), "\x00", " "), "", "")
+	info, err := model.NewProcessInfo(pid, strings.TrimSpace(string(name)), executable, strings.ReplaceAll(string(command), "\x00", " "), readCwd(base), "")
 	if err != nil {
 		return model.ProcessInfo{}, err
 	}
 	return info.WithParent(readStatusParentPID(filepath.Join(base, "status"))), nil
+}
+
+// readCwd resolves the /proc/<pid>/cwd link; empty when unreadable, which is
+// common for processes owned by other users.
+func readCwd(base string) string {
+	target, err := os.Readlink(filepath.Join(base, "cwd"))
+	if err != nil {
+		return ""
+	}
+	return target
 }
 
 // readStatusParentPID extracts the PPid line from /proc/<pid>/status,

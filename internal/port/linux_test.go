@@ -4,6 +4,7 @@ package port
 
 import (
 	"fmt"
+	"github.com/MY-Final/portWatch/pkg/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,7 +62,7 @@ func TestListProcNetResolvesPIDsFromInodeMap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := listProcNet(root, os.ReadDir)
+	rows, err := listProcNet(root, os.ReadDir, "tcp")
 	if err != nil {
 		t.Fatalf("listProcNet() error = %v", err)
 	}
@@ -103,7 +104,7 @@ func TestListProcNetScansProcRootOnceForManyRows(t *testing.T) {
 			rootScans++
 		}
 		return os.ReadDir(path)
-	})
+	}, "tcp")
 	if err != nil {
 		t.Fatalf("listProcNet() error = %v", err)
 	}
@@ -119,7 +120,7 @@ func TestListProcNetScansProcRootOnceForManyRows(t *testing.T) {
 }
 
 func TestListProcNetToleratesMissingTables(t *testing.T) {
-	rows, err := listProcNet(t.TempDir(), os.ReadDir)
+	rows, err := listProcNet(t.TempDir(), os.ReadDir, "tcp")
 	if err != nil {
 		t.Fatalf("listProcNet() error = %v", err)
 	}
@@ -144,5 +145,107 @@ func TestSocketInode(t *testing.T) {
 		if inode != tc.want || ok != tc.ok {
 			t.Fatalf("socketInode(%q) = (%q, %v), want (%q, %v)", tc.link, inode, ok, tc.want, tc.ok)
 		}
+	}
+}
+
+func TestListProcNetUDP(t *testing.T) {
+	root := t.TempDir()
+	writeProcTable(t, filepath.Join(root, "net", "udp"),
+		procUDPRow(0, "0100007F", 5353, "2001"),
+		procUDPRow(1, "00000000", 68, "2002"),
+	)
+	writeProcTable(t, filepath.Join(root, "net", "udp6"),
+		procUDPRow(0, "00000000000000000000000001000000", 546, "2003"),
+	)
+	fakeProcessFDs(t, root, "500", map[string]string{"0": "socket:[2001]"})
+	fakeProcessFDs(t, root, "600", map[string]string{"1": "socket:[2002]", "2": "socket:[2003]"})
+
+	rows, err := listProcNet(root, os.ReadDir, "udp")
+	if err != nil {
+		t.Fatalf("listProcNet(udp) error = %v", err)
+	}
+	want := []struct {
+		port  int
+		pid   int
+		local string
+	}{
+		{68, 600, "0.0.0.0"},
+		{5353, 500, "127.0.0.1"},
+		{546, 600, "::1"},
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("rows = %+v, want %d rows", rows, len(want))
+	}
+	for i, expected := range want {
+		if rows[i].Port != expected.port || rows[i].PID != expected.pid || rows[i].LocalAddr != expected.local {
+			t.Fatalf("rows[%d] = %+v, want port=%d pid=%d local=%s", i, rows[i], expected.port, expected.pid, expected.local)
+		}
+		if rows[i].Protocol != "UDP" || rows[i].State != "BOUND" {
+			t.Fatalf("rows[%d] protocol/state = %s/%s, want UDP/BOUND", i, rows[i].Protocol, rows[i].State)
+		}
+	}
+}
+
+// procUDPRow renders one /proc/net/udp line; field 9 carries the inode.
+func procUDPRow(sequence int, address string, port int, inode string) string {
+	return fmt.Sprintf("  %2d: %s:%04X 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 %s 1 0000000000000000 100 0 0 10 0",
+		sequence, address, port, inode)
+}
+
+func TestParseProcTCPAllStates(t *testing.T) {
+	root := t.TempDir()
+	writeProcTable(t, filepath.Join(root, "net", "tcp"),
+		procTCPRow(0, "0100007F", 8080, "0A", "1001"),
+		procTCPRow(1, "0100007F", 4444, "01", "1002"),
+		procTCPRow(2, "0100007F", 5555, "06", "1003"),
+		procTCPRow(3, "0100007F", 6666, "08", "1004"),
+		procTCPRow(4, "0100007F", 7777, "99", "1005"),
+	)
+	inodePIDs := map[string]int{"1001": 1, "1002": 2, "1003": 3, "1004": 4, "1005": 5}
+
+	listeners, err := parseProcTCP(filepath.Join(root, "net", "tcp"), inodePIDs, false)
+	if err != nil {
+		t.Fatalf("parseProcTCP(listeners) error = %v", err)
+	}
+	if len(listeners) != 1 || listeners[0].Port != 8080 || listeners[0].State != "LISTENING" {
+		t.Fatalf("listeners = %+v, want only the 0A row", listeners)
+	}
+
+	all, err := parseProcTCP(filepath.Join(root, "net", "tcp"), inodePIDs, true)
+	if err != nil {
+		t.Fatalf("parseProcTCP(all) error = %v", err)
+	}
+	if len(all) != 5 {
+		t.Fatalf("rows = %d, want all 5", len(all))
+	}
+	byPort := map[int]model.PortInfo{}
+	for _, row := range all {
+		byPort[row.Port] = row
+	}
+	if byPort[4444].State != "ESTABLISHED" || byPort[4444].RemoteAddr == "" {
+		t.Fatalf("4444 = %+v, want ESTABLISHED with a remote address", byPort[4444])
+	}
+	if byPort[5555].State != "TIME_WAIT" {
+		t.Fatalf("5555 state = %s, want TIME_WAIT", byPort[5555].State)
+	}
+	if byPort[6666].State != "CLOSE_WAIT" {
+		t.Fatalf("6666 state = %s, want CLOSE_WAIT", byPort[6666].State)
+	}
+	if byPort[7777].State != "UNKNOWN" {
+		t.Fatalf("7777 state = %s, want UNKNOWN for an unmapped code", byPort[7777].State)
+	}
+	if byPort[4444].PID != 2 {
+		t.Fatalf("4444 pid = %d, want 2 from the inode map", byPort[4444].PID)
+	}
+}
+
+func TestTCPStateNamesComplete(t *testing.T) {
+	for code, name := range tcpStateNames {
+		if strings.TrimSpace(name) == "" {
+			t.Fatalf("state %q has an empty name", code)
+		}
+	}
+	if tcpStateNames["0A"] != "LISTENING" || tcpStateNames["01"] != "ESTABLISHED" {
+		t.Fatalf("core state names changed: %+v", tcpStateNames)
 	}
 }

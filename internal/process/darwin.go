@@ -28,11 +28,31 @@ func (DarwinManager) Info(ctx context.Context, pid int) (model.ProcessInfo, erro
 	if len(fields) == 0 {
 		return model.ProcessInfo{}, ErrProcessNotFound
 	}
-	info, err := model.NewProcessInfo(pid, fields[0], fields[0], strings.TrimSpace(string(output)), "", "")
+	info, err := model.NewProcessInfo(pid, fields[0], fields[0], strings.TrimSpace(string(output)), queryDarwinWorkingDir(ctx, pid), "")
 	if err != nil {
 		return model.ProcessInfo{}, err
 	}
 	return info.WithParent(queryDarwinParentPID(ctx, pid)), nil
+}
+
+// queryDarwinWorkingDir asks lsof for the process working directory; empty
+// on any failure, since lsof may be unavailable or the target protected.
+func queryDarwinWorkingDir(ctx context.Context, pid int) string {
+	output, err := exec.CommandContext(ctx, "lsof", "-a", "-p", strconv.Itoa(pid), "-d", "cwd", "-Fn").Output()
+	if err != nil {
+		return ""
+	}
+	return parseLsofCwd(string(output))
+}
+
+// parseLsofCwd extracts the first n<path> record from lsof -Fn output.
+func parseLsofCwd(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if len(line) > 1 && line[0] == 'n' {
+			return line[1:]
+		}
+	}
+	return ""
 }
 
 // queryDarwinParentPID asks ps for the parent PID; 0 on any failure.

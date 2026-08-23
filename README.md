@@ -4,7 +4,7 @@
 
 **面向开发者的跨平台端口诊断与进程管理 CLI**
 
-[![version](https://img.shields.io/badge/version-v0.7.0-blue)](https://github.com/MY-Final/portWatch/releases)
+[![version](https://img.shields.io/badge/version-v0.8.0-blue)](https://github.com/MY-Final/portWatch/releases)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-607D8B)](#-平台支持)
 [![dist](https://img.shields.io/badge/dist-single%20binary-2E7D32)](https://github.com/MY-Final/portWatch/releases)
@@ -24,10 +24,10 @@ irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1 | iex
 
 | | |
 | --- | --- |
-| 🔍 **查端口** | 单个 / 范围 / 集合查询，按进程名、PID、状态筛选；Windows 额外支持 UDP（`--protocol udp\|all`） |
-| 👀 **找进程** | 端口 → PID → 命令行 / 可执行文件 / 工作目录；`find` 按进程名反查端口 |
+| 🔍 **查端口** | 单个 / 范围 / 集合查询，按进程名、PID、状态筛选；三平台均支持 UDP（`--protocol udp\|all`） |
+| 👀 **找进程** | 端口 → PID → 命令行 / 可执行文件 / 工作目录；`info` 展示父进程链；`find` 按进程名反查端口 |
 | 🔥 **释放端口** | `free` / `kill` 先展示进程详情再确认，终止后自动验证端口已释放 |
-| 📡 **实时监控** | `watch` 增量报告端口上下线，`--interval` 自定义周期 |
+| 📡 **实时监控** | `watch` 增量报告端口上下线；`wait` 阻塞等待端口空闲/被占用（`--timeout` 限时） |
 | 🖥️ **交互界面** | `tui` 一屏搞定：键盘导航、过滤、详情、终止确认 |
 | 🤖 **脚本友好** | 稳定 JSON 契约（`schema_version`）、JSON Lines 事件流、可复现退出码、GNU 风格参数交错 |
 | ⚡ **快** | Windows 直读进程 PEB，不拉起 PowerShell/WMI，上百端口的进程信息毫秒级返回 |
@@ -45,7 +45,7 @@ irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1 | iex
 管道方式无法向脚本传参（`iex` 只接收整段脚本文本），需要带参数时改用：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1))) -Version v0.7.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1))) -Version v0.8.0
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1))) -Uninstall
 ```
 
@@ -54,7 +54,7 @@ irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1 | iex
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | bash
 # 固定版本：
-curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | PORTWATCH_VERSION=v0.7.0 bash
+curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | PORTWATCH_VERSION=v0.8.0 bash
 ```
 
 装入 `~/.local/bin`；目录不在 PATH 时自动在 `~/.bashrc`（zsh 为 `~/.zshrc`）追加一行**带标记**的
@@ -131,7 +131,7 @@ Port 5173 is now available.
 | --- | --- |
 | `--json` | 输出稳定 JSON（端口 / 搜索 / 详情 / watch 事件） |
 | `--yes` | 跳过确认提示（`free` / `kill` / `uninstall`） |
-| `--protocol tcp\|udp\|all` | 协议选择；UDP 仅 Windows 支持 |
+| `--protocol tcp\|udp\|all` | 协议选择（三平台均支持） |
 | `--process <name>` | 按进程名筛选 |
 | `--pid <p1,p2>` | 按 PID 集合筛选 |
 | `--state <state>` | 按端口状态筛选（如 `LISTENING`） |
@@ -148,7 +148,7 @@ Port 5173 is now available.
 # 全部监听端口
 pw
 
-# UDP 绑定端口（Windows）
+# UDP 绑定端口
 pw --protocol udp
 
 # 只看 node 进程监听的端口
@@ -222,16 +222,16 @@ pw --expect occupied --timeout 30s wait 8080
 | 能力 | Windows | Linux | macOS |
 | --- | --- | --- | --- |
 | TCP 监听端口 | ✓ | ✓ | ✓（依赖 `lsof`） |
-| TCP 连接（非 LISTENING） | ✓ | ✗ | ✗ |
-| UDP 绑定端口 | ✓ | ✗ | ✗ |
+| TCP 连接（非 LISTENING） | ✓ | ✓（TUI Connections/All 视图） | ✗ |
+| UDP 绑定端口 | ✓ | ✓（`/proc/net/udp`） | ✓（依赖 `lsof`） |
 | 进程命令行 | ✓（直读 PEB） | ✓（`/proc/<pid>/cmdline`） | ✓（依赖 `ps`） |
-| 进程工作目录 | ✓（直读 PEB） | ✗ | ✗ |
+| 进程工作目录 | ✓（直读 PEB） | ✓（`/proc/<pid>/cwd`） | ✓（依赖 `lsof`） |
 
 - **Windows**：IP Helper API 扫描 IPv4/IPv6，进程信息直接读取 PEB，无 PowerShell/WMI 依赖；
 - **Linux**：`/proc`（单次遍历构建 inode→PID 映射）；
 - **macOS**：`lsof` + `ps`。
 
-非 Windows 平台使用 `--protocol udp` 时会返回明确错误，文案注明仅 Windows 支持及当前平台名。
+Linux 的 TUI Connections/All 视图读取 `/proc/net/tcp{,6}` 的全部状态并与 Windows 同名；macOS 的 TUI 非 LISTENING 视图暂不支持，会返回明确错误。
 
 ## 🧹 卸载
 
