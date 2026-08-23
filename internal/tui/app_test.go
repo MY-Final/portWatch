@@ -251,6 +251,24 @@ func TestSelectionCursorAndSummaryMoveTogether(t *testing.T) {
 	}
 }
 
+func TestSmallTerminalKeepsSelectedRowVisible(t *testing.T) {
+	ports := make([]model.PortInfo, 20)
+	for i := range ports {
+		ports[i] = model.PortInfo{Port: 10000 + i, PID: 20000 + i, ProcessName: "service.exe"}
+	}
+	m := Model{Ports: ports, Height: 14, Selected: 15}
+	view := m.View()
+	if !strings.Contains(view, "> 10015") {
+		t.Fatalf("selected row is outside viewport: %q", view)
+	}
+	if strings.Contains(view, "> 10000") {
+		t.Fatalf("viewport rendered stale first-row cursor: %q", view)
+	}
+	if !strings.Contains(view, "Selected: 10015 · PID 20015") {
+		t.Fatalf("selection summary missing: %q", view)
+	}
+}
+
 func TestV6DetailsAndConfirmAreSeparatePages(t *testing.T) {
 	m := Model{Ports: []model.PortInfo{{Port: 8080, Protocol: "TCP", State: "LISTENING", PID: 42, ProcessName: "demo.exe"}}}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})

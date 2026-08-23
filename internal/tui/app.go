@@ -255,7 +255,7 @@ func (m Model) writeTable(b *strings.Builder) {
 	} else {
 		b.WriteString("PORT   PROTOCOL   PID      PROCESS\n")
 	}
-	indexes := m.visibleIndexes()
+	indexes := m.tableIndexes()
 	for _, index := range indexes {
 		record := m.Ports[index]
 		marker := "  "
@@ -287,6 +287,32 @@ func (m Model) writeTable(b *strings.Builder) {
 			b.WriteString("No listening ports found.\n")
 		}
 	}
+}
+
+// tableIndexes keeps the active row inside the terminal viewport. Without a
+// bounded window, a long listener list can push the selected row off-screen
+// while the summary still reports it as selected.
+func (m Model) tableIndexes() []int {
+	indexes := m.visibleIndexes()
+	if len(indexes) == 0 || m.Height <= 0 {
+		return indexes
+	}
+	limit := m.Height - 10
+	if limit < 1 {
+		limit = 1
+	}
+	if len(indexes) <= limit {
+		return indexes
+	}
+	selectedPosition := visiblePosition(indexes, m.Selected)
+	start := selectedPosition - limit + 1
+	if start < 0 {
+		start = 0
+	}
+	if start+limit > len(indexes) {
+		start = len(indexes) - limit
+	}
+	return indexes[start : start+limit]
 }
 
 func (m Model) writeSelection(b *strings.Builder) {
