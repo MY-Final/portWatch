@@ -155,7 +155,7 @@ func TestListProcNetUDP(t *testing.T) {
 		procUDPRow(1, "00000000", 68, "2002"),
 	)
 	writeProcTable(t, filepath.Join(root, "net", "udp6"),
-		procUDPRow(0, "00000000000000000000000001000000", 546, "2003"),
+		procUDPRow(0, "00000000000000000000000000000001", 546, "2003"),
 	)
 	fakeProcessFDs(t, root, "500", map[string]string{"0": "socket:[2001]"})
 	fakeProcessFDs(t, root, "600", map[string]string{"1": "socket:[2002]", "2": "socket:[2003]"})
@@ -170,8 +170,8 @@ func TestListProcNetUDP(t *testing.T) {
 		local string
 	}{
 		{68, 600, "0.0.0.0"},
-		{5353, 500, "127.0.0.1"},
 		{546, 600, "::1"},
+		{5353, 500, "127.0.0.1"},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("rows = %+v, want %d rows", rows, len(want))
