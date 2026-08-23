@@ -44,6 +44,12 @@ func isTransitionalArtifactForOS(name string) bool {
 // because a detached process has no console and timeout.exe fails there
 // immediately, which would make del run while this process still maps the
 // file.
+//
+// The script is created in the system temp directory rather than next to
+// the binary: cmd /c mangles quoting for script paths containing & ( ) ^ %
+// (the audit's adversarial-directory tests), while quoting inside batch
+// content keeps those characters literal. The staged path inside the script
+// still escapes % as %% because batch files expand %VAR% even in quotes.
 func removeBinaryForOS(path string) error {
 	dir := filepath.Dir(path)
 	name := filepath.Base(path)
@@ -54,9 +60,9 @@ func removeBinaryForOS(path string) error {
 	if err := os.Rename(path, staged); err != nil {
 		return classifyRemoveError(err)
 	}
-	script, err := os.CreateTemp(dir, deletionScriptPrefix+"*"+deletionScriptSuffix)
+	script, err := os.CreateTemp(os.TempDir(), deletionScriptPrefix+"*"+deletionScriptSuffix)
 	if err != nil {
-		return fmt.Errorf("create uninstall script next to %s: %w", staged, err)
+		return fmt.Errorf("create uninstall script for %s: %w", staged, err)
 	}
 	fmt.Fprintf(script, "@ping -n 2 127.0.0.1 >nul\r\n@del /q %s\r\n@del /q \"%%~f0\"\r\n", quoteWindowsPath(staged))
 	closeErr := script.Close()
@@ -74,6 +80,9 @@ func removeBinaryForOS(path string) error {
 }
 
 func quoteWindowsPath(path string) string {
+	// Batch files expand %VAR% inside double quotes; doubling renders a
+	// literal percent sign. Quotes themselves are doubled per cmd rules.
+	path = strings.ReplaceAll(path, "%", "%%")
 	return `"` + strings.ReplaceAll(path, `"`, `""`) + `"`
 }
 
