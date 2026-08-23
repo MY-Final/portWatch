@@ -28,7 +28,24 @@ func (DarwinManager) Info(ctx context.Context, pid int) (model.ProcessInfo, erro
 	if len(fields) == 0 {
 		return model.ProcessInfo{}, ErrProcessNotFound
 	}
-	return model.NewProcessInfo(pid, fields[0], fields[0], strings.TrimSpace(string(output)), "", "")
+	info, err := model.NewProcessInfo(pid, fields[0], fields[0], strings.TrimSpace(string(output)), "", "")
+	if err != nil {
+		return model.ProcessInfo{}, err
+	}
+	return info.WithParent(queryDarwinParentPID(ctx, pid)), nil
+}
+
+// queryDarwinParentPID asks ps for the parent PID; 0 on any failure.
+func queryDarwinParentPID(ctx context.Context, pid int) int {
+	output, err := exec.CommandContext(ctx, "ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return 0
+	}
+	ppid, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil {
+		return 0
+	}
+	return ppid
 }
 func (DarwinManager) Exists(_ context.Context, pid int) (bool, error) {
 	if err := ValidatePID(pid); err != nil {

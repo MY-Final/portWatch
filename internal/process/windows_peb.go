@@ -38,6 +38,7 @@ func queryProcessParameters(handle windows.Handle, pid int) (remoteProcessParame
 	}
 
 	parameters := remoteProcessParameters{}
+	parameters.ParentPID = int(info.InheritedFromUniqueProcessID)
 	var err error
 	if parameters.CurrentDirectory, err = readRemoteUnicodeString(handle, block, offsetParamsCurrentDir); err != nil {
 		return remoteProcessParameters{}, fmt.Errorf("read current directory for pid %d: %w", pid, err)
@@ -51,6 +52,9 @@ func queryProcessParameters(handle windows.Handle, pid int) (remoteProcessParame
 type remoteProcessParameters struct {
 	CurrentDirectory string
 	CommandLine      string
+	// ParentPID comes from InheritedFromUniqueProcessID in the same
+	// PROCESS_BASIC_INFORMATION query; 0 when the value is unavailable.
+	ParentPID int
 }
 
 // processBasicInformation mirrors PROCESS_BASIC_INFORMATION. ExitStatus,

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/MY-Final/portWatch/pkg/model"
@@ -35,7 +36,31 @@ func (LinuxManager) Info(_ context.Context, pid int) (model.ProcessInfo, error) 
 	if err != nil {
 		return model.ProcessInfo{}, mapLinuxError(err)
 	}
-	return model.NewProcessInfo(pid, strings.TrimSpace(string(name)), executable, strings.ReplaceAll(string(command), "\x00", " "), "", "")
+	info, err := model.NewProcessInfo(pid, strings.TrimSpace(string(name)), executable, strings.ReplaceAll(string(command), "\x00", " "), "", "")
+	if err != nil {
+		return model.ProcessInfo{}, err
+	}
+	return info.WithParent(readStatusParentPID(filepath.Join(base, "status"))), nil
+}
+
+// readStatusParentPID extracts the PPid line from /proc/<pid>/status,
+// returning 0 when the file is unreadable or malformed.
+func readStatusParentPID(statusPath string) int {
+	data, err := os.ReadFile(statusPath)
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(line, "PPid:") {
+			continue
+		}
+		ppid, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "PPid:")))
+		if err != nil {
+			return 0
+		}
+		return ppid
+	}
+	return 0
 }
 
 func (LinuxManager) Exists(_ context.Context, pid int) (bool, error) {

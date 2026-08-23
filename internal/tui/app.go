@@ -329,6 +329,7 @@ func (m Model) viewDetails() string {
 		{"Remote Address", display(record.RemoteAddr)},
 		{"PID", fmt.Sprint(record.PID)},
 		{"Process Name", m.processName(record)},
+		{"Parent Chain", display(m.parentChain(info))},
 		{"Executable Path", display(info.Executable)},
 		{"Command Line", display(info.Command)},
 		{"Working Directory", display(info.WorkingDir)},
@@ -404,6 +405,24 @@ func (m Model) processName(record model.PortInfo) string {
 		return record.ProcessName
 	}
 	return "Unknown"
+}
+
+// parentChain renders the ancestor line for the details page using the same
+// shared walk as the info command; empty when no parent is known.
+func (m Model) parentChain(info model.ProcessInfo) string {
+	if m.Manager == nil {
+		return ""
+	}
+	ctx := m.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ancestors := processinfo.Ancestors(ctx, m.Manager, info, processinfo.MaxAncestorHops)
+	chain := make([]model.ProcessAncestor, 0, len(ancestors))
+	for _, ancestor := range ancestors {
+		chain = append(chain, model.ProcessAncestor{PID: ancestor.PID, Name: ancestor.Name})
+	}
+	return processinfo.FormatAncestors(info.Name, info.PID, chain)
 }
 
 func (m Model) visibleIndexes() []int {

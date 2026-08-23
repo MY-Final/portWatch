@@ -66,6 +66,15 @@ type InfoProcessResult struct {
 	WorkingDir string `json:"working_dir"`
 	User       string `json:"user"`
 	Ports      []int  `json:"ports"`
+	// ParentPID and Ancestors are additive fields; the schema stays "1".
+	ParentPID int               `json:"parent_pid"`
+	Ancestors []ProcessAncestor `json:"ancestors"`
+}
+
+// ProcessAncestor is one entry of the info parent chain, oldest last.
+type ProcessAncestor struct {
+	PID  int    `json:"pid"`
+	Name string `json:"name"`
 }
 
 // WatchEventResponse is one machine-readable port change event.

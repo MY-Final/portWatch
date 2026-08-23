@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -357,5 +358,33 @@ func TestV6KillSuccessStatusSurvivesRefresh(t *testing.T) {
 	updated, _ = updated.(Model).Update(command())
 	if !strings.Contains(updated.(Model).Status, "Process terminated") {
 		t.Fatalf("status = %q, want termination feedback", updated.(Model).Status)
+	}
+}
+
+type chainTUIManager struct{}
+
+func (chainTUIManager) Info(_ context.Context, pid int) (model.ProcessInfo, error) {
+	return model.ProcessInfo{PID: pid, Name: fmt.Sprintf("p%d", pid), ParentPID: pid - 1}, nil
+}
+func (chainTUIManager) Exists(context.Context, int) (bool, error) { return true, nil }
+func (chainTUIManager) Terminate(context.Context, int) error      { return nil }
+
+func TestV6DetailsShowParentChain(t *testing.T) {
+	m := Model{
+		Manager:      chainTUIManager{},
+		Page:         pageDetails,
+		DetailRecord: model.PortInfo{Port: 8080, PID: 42},
+		Infos:        map[int]model.ProcessInfo{42: {PID: 42, Name: "node.exe", ParentPID: 41}},
+	}
+	view := m.View()
+	if !strings.Contains(view, "Parent Chain") {
+		t.Fatalf("details view missing Parent Chain field:\n%s", view)
+	}
+	if !strings.Contains(view, "node.exe (42) ← p41 (41)") {
+		t.Fatalf("details view missing chain text:\n%s", view)
+	}
+	// p41's parent is p40, p40's parent is p39, ... walk stops at the cap.
+	if strings.Contains(view, "(9)") {
+		t.Fatalf("chain exceeded the hop cap:\n%s", view)
 	}
 }

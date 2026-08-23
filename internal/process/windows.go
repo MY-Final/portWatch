@@ -52,7 +52,11 @@ func (WindowsManager) Info(ctx context.Context, pid int) (model.ProcessInfo, err
 	if err != nil {
 		return model.ProcessInfo{}, err
 	}
-	return model.NewProcessInfo(pid, filepath.Base(executable), executable, parameters.CommandLine, parameters.CurrentDirectory, "")
+	info, err := model.NewProcessInfo(pid, filepath.Base(executable), executable, parameters.CommandLine, parameters.CurrentDirectory, "")
+	if err != nil {
+		return model.ProcessInfo{}, err
+	}
+	return info.WithParent(parameters.ParentPID), nil
 }
 
 // Exists reports whether a process can be opened for query. The handle is

@@ -11,6 +11,7 @@ import (
 
 	"github.com/MY-Final/portWatch/internal/port"
 	"github.com/MY-Final/portWatch/internal/process"
+	"github.com/MY-Final/portWatch/internal/processinfo"
 	"github.com/MY-Final/portWatch/pkg/model"
 )
 
@@ -30,6 +31,7 @@ func Info(ctx context.Context, scanner port.Scanner, manager process.Manager, pi
 	fields := [][2]string{
 		{"PID", fmt.Sprint(result.PID)},
 		{"PROCESS NAME", display(result.Name)},
+		{"PARENT CHAIN", display(processinfo.FormatAncestors(result.Name, result.PID, result.Ancestors))},
 		{"EXECUTABLE PATH", display(result.Executable)},
 		{"COMMAND", display(result.Command)},
 		{"WORKING DIRECTORY", display(result.WorkingDir)},
@@ -87,6 +89,11 @@ func inspectProcess(ctx context.Context, scanner port.Scanner, manager process.M
 		portNumbers = append(portNumbers, record.Port)
 	}
 	sort.Ints(portNumbers)
+	ancestors := processinfo.Ancestors(ctx, manager, info, processinfo.MaxAncestorHops)
+	chain := make([]model.ProcessAncestor, 0, len(ancestors))
+	for _, ancestor := range ancestors {
+		chain = append(chain, model.ProcessAncestor{PID: ancestor.PID, Name: ancestor.Name})
+	}
 	return model.InfoProcessResult{
 		PID:        pid,
 		Name:       info.Name,
@@ -95,6 +102,8 @@ func inspectProcess(ctx context.Context, scanner port.Scanner, manager process.M
 		WorkingDir: info.WorkingDir,
 		User:       info.User,
 		Ports:      portNumbers,
+		ParentPID:  info.ParentPID,
+		Ancestors:  chain,
 	}, nil
 }
 
