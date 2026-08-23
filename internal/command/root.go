@@ -243,15 +243,21 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	}
 	if command.Action == ActionHelp {
 		_, _ = fmt.Fprintln(stdout, "PortWatch - cross-platform port diagnostics")
-		_, _ = fmt.Fprintln(stdout, "Usage: portwatch [flags] [port]")
-		_, _ = fmt.Fprintln(stdout, "       portwatch free <port>")
-		_, _ = fmt.Fprintln(stdout, "       portwatch kill <pid>")
-		_, _ = fmt.Fprintln(stdout, "       portwatch info <pid>")
-		_, _ = fmt.Fprintln(stdout, "       portwatch find <name>")
-		_, _ = fmt.Fprintln(stdout, "       portwatch <start-end>")
-		_, _ = fmt.Fprintln(stdout, "       portwatch watch")
-		_, _ = fmt.Fprintln(stdout, "       portwatch tui [port]")
-		_, _ = fmt.Fprintln(stdout, "       portwatch uninstall")
+		usage := []string{
+			"[flags] [port]",
+			"free <port>",
+			"kill <pid>",
+			"info <pid>",
+			"find <name>",
+			"<start-end>",
+			"watch",
+			"tui [port]",
+			"uninstall",
+		}
+		_, _ = fmt.Fprintf(stdout, "Usage: %s %s\n", BinaryName, usage[0])
+		for _, line := range usage[1:] {
+			_, _ = fmt.Fprintf(stdout, "       %s %s\n", BinaryName, line)
+		}
 		_, _ = fmt.Fprintln(stdout, "Flags: --json --yes --ports <p1,p2> --pid <p1,p2> --process <name> --state <state> --interval <duration> --protocol tcp")
 		return ExitSuccess
 	}
