@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 func (m Model) handleKey(key tea.KeyMsg) (Model, tea.Cmd) {

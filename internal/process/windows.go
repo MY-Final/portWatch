@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 // WindowsManager reads process information through the Windows process API:

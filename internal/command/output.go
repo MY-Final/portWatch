@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"text/tabwriter"
 
-	"github.com/portwatch/portwatch/internal/service"
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/internal/service"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 const outputHeader = "PORT\tPROTOCOL\tSTATE\tPID\tPROCESS NAME\tCOMMAND\tEXECUTABLE PATH\n"

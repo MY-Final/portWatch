@@ -11,11 +11,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portwatch/portwatch/internal/port"
-	"github.com/portwatch/portwatch/internal/processinfo"
-	"github.com/portwatch/portwatch/internal/service"
-	"github.com/portwatch/portwatch/internal/tui"
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/internal/port"
+	"github.com/MY-Final/portWatch/internal/processinfo"
+	"github.com/MY-Final/portWatch/internal/service"
+	"github.com/MY-Final/portWatch/internal/tui"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 // PortScanner is the scanner capability used by command handlers. It is kept

@@ -8,10 +8,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/portwatch/portwatch/internal/port"
-	"github.com/portwatch/portwatch/internal/process"
-	"github.com/portwatch/portwatch/internal/watch"
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/internal/port"
+	"github.com/MY-Final/portWatch/internal/process"
+	"github.com/MY-Final/portWatch/internal/watch"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 func Watch(ctx context.Context, scanner port.Scanner, manager process.Manager, interval time.Duration, portNumber int, out, errOut io.Writer) error {

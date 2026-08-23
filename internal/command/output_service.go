@@ -6,8 +6,8 @@ import (
 	"sort"
 	"text/tabwriter"
 
-	"github.com/portwatch/portwatch/internal/service"
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/internal/service"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 // RenderPortsWithServices is an opt-in service-aware table that preserves the

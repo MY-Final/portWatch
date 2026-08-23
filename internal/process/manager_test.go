@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 type fakeManager struct {

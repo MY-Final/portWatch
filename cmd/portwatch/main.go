@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/portwatch/portwatch/internal/command"
-	"github.com/portwatch/portwatch/internal/port"
-	"github.com/portwatch/portwatch/internal/process"
+	"github.com/MY-Final/portWatch/internal/command"
+	"github.com/MY-Final/portWatch/internal/port"
+	"github.com/MY-Final/portWatch/internal/process"
 )
 
 var version = "0.7.0"

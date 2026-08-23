@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 // QueryFilter contains the user-selectable filters shared by port queries.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 func TestFindFiltersAndAggregatesPorts(t *testing.T) {

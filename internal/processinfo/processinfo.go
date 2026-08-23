@@ -7,7 +7,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 // Manager is the process capability required to resolve metadata. Any

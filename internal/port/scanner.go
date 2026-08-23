@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 // ErrUnsupported indicates that port scanning is not available on the

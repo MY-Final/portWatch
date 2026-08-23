@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 type watchCommandScanner struct {

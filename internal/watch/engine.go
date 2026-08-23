@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/portwatch/portwatch/internal/port"
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/internal/port"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 type EventKind string

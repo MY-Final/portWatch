@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 func TestRulesDetectKnownServices(t *testing.T) {

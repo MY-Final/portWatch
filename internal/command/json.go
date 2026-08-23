@@ -6,8 +6,8 @@ import (
 	"io"
 	"sort"
 
-	"github.com/portwatch/portwatch/internal/service"
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/internal/service"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 func RenderJSON(w io.Writer, ports []model.PortInfo, infos map[int]model.ProcessInfo) error {

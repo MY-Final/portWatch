@@ -1,4 +1,4 @@
-module github.com/portwatch/portwatch
+module github.com/MY-Final/portWatch
 
 go 1.22
 

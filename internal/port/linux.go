@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 type LinuxScanner struct{}

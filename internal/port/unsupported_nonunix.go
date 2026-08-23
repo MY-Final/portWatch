@@ -4,7 +4,7 @@ package port
 
 import (
 	"context"
-	"github.com/portwatch/portwatch/pkg/model"
+	"github.com/MY-Final/portWatch/pkg/model"
 )
 
 type unsupportedScanner struct{}
