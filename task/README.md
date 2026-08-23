@@ -49,7 +49,9 @@ internal/command/errors.go
 | Phase 1-10 | `phase-01-mvp/` 至 `phase-10-v3/` | 已完成 |
 | V4 / V5 / V6 | 见 [`../prd/`](../prd/) 与本目录各表 | 已完成（V5 被 V6 取代） |
 | v0.6.0–v0.8.0 | 无预拆分卡片，见 [`INDEX.md`](INDEX.md) 实现日志 | 已完成 |
-| Backlog | `backlog/` | 001-udp 已完成；002/003 候选 |
+| Phase 11 | `phase-11-config/` | 已排期（目标 v0.9.0） |
+| Phase 12 | `phase-12-security/` | 已排期（可与 Phase 11 并行） |
+| Backlog | `backlog/` | 001 done；002/003 已转 Phase 11/12 |
 
 TUI 产品重构见 [`../prd/v5-tui-polish.md`](../prd/v5-tui-polish.md)，对应任务位于
 `phase-05-tui-polish/`。该阶段默认先完成任务评审，再按 README 中的依赖图调度。

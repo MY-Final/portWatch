@@ -1,5 +1,8 @@
 # Backlog 002 Configuration
 
+> 状态：**scheduled**。已排期为 Phase 11，任务卡见 [`../phase-11-config/`](../phase-11-config/)，目标 v0.9.0。以下为原始卡片内容。
+
+
 ## 目标
 评估并在需求成立时增加用户配置文件（默认端口过滤、刷新间隔）。
 

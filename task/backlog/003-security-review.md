@@ -1,5 +1,8 @@
 # Backlog 003 Security Review
 
+> 状态：**scheduled**。已排期为 Phase 12，范围按现状重写（PowerShell 路径已被 PEB 取代），任务卡见 [`../phase-12-security/`](../phase-12-security/)。以下为原始卡片内容。
+
+
 ## 目标
 对 Windows API 权限、PowerShell 调用、PID 重用、命令注入和 kill 安全确认做一次独立审计。
 
