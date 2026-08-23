@@ -10,13 +10,15 @@ import (
 )
 
 // removeBinaryForOS deletes the executable directly; unix allows removing a
-// running binary.
+// running binary, so no transitional files ever exist.
 func removeBinaryForOS(path string) error {
 	if err := os.Remove(path); err != nil {
 		return classifyRemoveError(err)
 	}
 	return nil
 }
+
+func isTransitionalArtifactForOS(string) bool { return false }
 
 func classifyRemoveError(err error) error {
 	if errors.Is(err, os.ErrPermission) {

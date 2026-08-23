@@ -68,7 +68,22 @@ func cleanInstallDirectory(dir string, out io.Writer) error {
 		return nil
 	}
 	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) > 0 {
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "Note: could not inspect %s, so the user PATH was not modified.\n", dir)
+		return nil
+	}
+	// The Windows delayed self-delete leaves a renamed image and a deletion
+	// script behind for about a second after this process exits; they do not
+	// count as leftovers, or the default-directory PATH cleanup could never
+	// run. Anything else in the directory still blocks the cleanup.
+	leftovers := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && isTransitionalArtifactForOS(entry.Name()) {
+			continue
+		}
+		leftovers++
+	}
+	if leftovers > 0 {
 		_, _ = fmt.Fprintf(out, "Note: %s is not empty, so the user PATH was not modified.\n", dir)
 		return nil
 	}

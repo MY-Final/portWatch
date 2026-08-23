@@ -17,6 +17,23 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+// Names of the short-lived files the delayed self-delete leaves next to the
+// binary: the renamed image and the generated deletion script. Both are gone
+// about a second after the uninstall exits; cleanInstallDirectory ignores
+// them when deciding whether the install directory is empty.
+const (
+	stagedBinarySuffix   = ".uninstalling.exe"
+	deletionScriptPrefix = "portwatch-uninstall-"
+	deletionScriptSuffix = ".cmd"
+)
+
+// isTransitionalArtifactForOS reports whether a directory entry name is one
+// of those transitional files.
+func isTransitionalArtifactForOS(name string) bool {
+	return strings.HasSuffix(name, stagedBinarySuffix) ||
+		(strings.HasPrefix(name, deletionScriptPrefix) && strings.HasSuffix(name, deletionScriptSuffix))
+}
+
 // removeBinaryForOS cannot delete the running executable directly, so it
 // renames it out of the way first (renames of running binaries are allowed)
 // and lets a detached cmd script delete the renamed file shortly after this
@@ -33,11 +50,11 @@ func removeBinaryForOS(path string) error {
 	if ext := filepath.Ext(name); strings.EqualFold(ext, ".exe") {
 		name = strings.TrimSuffix(name, ext)
 	}
-	staged := filepath.Join(dir, name+".uninstalling.exe")
+	staged := filepath.Join(dir, name+stagedBinarySuffix)
 	if err := os.Rename(path, staged); err != nil {
 		return classifyRemoveError(err)
 	}
-	script, err := os.CreateTemp(dir, "portwatch-uninstall-*.cmd")
+	script, err := os.CreateTemp(dir, deletionScriptPrefix+"*"+deletionScriptSuffix)
 	if err != nil {
 		return fmt.Errorf("create uninstall script next to %s: %w", staged, err)
 	}
