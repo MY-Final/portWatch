@@ -106,16 +106,20 @@ function Remove-UserPathEntry([string]$Dir) {
 }
 
 if ($Uninstall) {
-    if (-not (Test-Path -LiteralPath $Target)) {
-        Write-Host "portwatch not found at $Target (already uninstalled)."
+    $pwTarget = Join-Path $InstallDir 'pw.exe'
+    if (-not (Test-Path -LiteralPath $Target) -and -not (Test-Path -LiteralPath $pwTarget)) {
+        Write-Host "portwatch not found in $InstallDir (already uninstalled)."
         exit 0
     }
-    Write-Step "Deleting $Target"
-    try {
-        Remove-Item -LiteralPath $Target -Force
-    } catch {
-        Write-Error "failed to delete ${Target}: $($_.Exception.Message); close any running portwatch process and retry"
-        exit 1
+    foreach ($file in @($Target, $pwTarget)) {
+        if (-not (Test-Path -LiteralPath $file)) { continue }
+        Write-Step "Deleting $file"
+        try {
+            Remove-Item -LiteralPath $file -Force
+        } catch {
+            Write-Error "failed to delete ${file}: $($_.Exception.Message); close any running portwatch process and retry"
+            exit 1
+        }
     }
     $remaining = @(Get-ChildItem -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue)
     if ($remaining.Count -eq 0) {
@@ -201,8 +205,10 @@ try {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     try {
         Copy-Item -LiteralPath $exe.FullName -Destination $Target -Force
+        # Short alias: the binary picks its name from argv[0].
+        Copy-Item -LiteralPath $Target -Destination (Join-Path $InstallDir 'pw.exe') -Force
     } catch {
-        Write-Error "cannot replace $Target (is portwatch running?): $($_.Exception.Message)"
+        Write-Error "cannot replace files in $InstallDir (is portwatch running?): $($_.Exception.Message)"
         exit 1
     }
 } finally {

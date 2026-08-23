@@ -30,13 +30,20 @@ for arg in "$@"; do
 done
 
 if [ "$UNINSTALL" -eq 1 ]; then
-  target="$INSTALL_DIR/portwatch"
-  if [ ! -f "$target" ]; then
-    echo "portwatch not found at $target (already uninstalled)."
+  removed_any=0
+  for name in portwatch pw; do
+    target="$INSTALL_DIR/$name"
+    if [ ! -f "$target" ]; then
+      continue
+    fi
+    say "Deleting $target"
+    rm -f "$target" || die "failed to delete $target; close running portwatch processes and retry"
+    removed_any=1
+  done
+  if [ "$removed_any" -eq 0 ]; then
+    echo "portwatch not found in $INSTALL_DIR (already uninstalled)."
     exit 0
   fi
-  say "Deleting $target"
-  rm -f "$target" || die "failed to delete $target; close running portwatch processes and retry"
   if [ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
     # rmdir only removes empty directories, so other tools in ~/.local/bin
     # keep it alive and the failure is silently ignored.
@@ -119,7 +126,9 @@ BIN=$(find "$TMP_DIR/extract" -type f -name portwatch | head -n 1)
 
 mkdir -p "$INSTALL_DIR"
 mv -f "$BIN" "$INSTALL_DIR/portwatch" || die "failed to install into $INSTALL_DIR"
-chmod +x "$INSTALL_DIR/portwatch"
+# Short alias: the binary picks its name from argv[0].
+cp -f "$INSTALL_DIR/portwatch" "$INSTALL_DIR/pw"
+chmod +x "$INSTALL_DIR/portwatch" "$INSTALL_DIR/pw"
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;

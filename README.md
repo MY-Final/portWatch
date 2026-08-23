@@ -1,57 +1,70 @@
+<div align="center">
+
 # PortWatch
 
-PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以查询 TCP
-监听端口对应的 PID、进程名、命令行和可执行文件路径，也可以在确认后终止占用端口的进程。
+**面向开发者的跨平台端口诊断与进程管理 CLI**
 
-当前版本：`v0.7.0`
-
-## 当前支持
-
-- 查询一个端口：`portwatch 8080`
-- 查询端口范围：`portwatch 3000-4000`
-- 查询指定端口集合：`portwatch --ports 3000,8080,8848`
-- 列出全部 TCP `LISTENING` 端口：`portwatch`
-- 释放端口：`portwatch free 8080`
-- 按 PID 终止进程：`portwatch kill 1234`
-- 按进程名搜索：`portwatch find node`
-- JSON 输出：`portwatch --json 8080`
-- JSON 搜索：`portwatch --json find node`
-- 实时监听端口变化：`portwatch --interval 2s watch`
-- JSON 监听事件：`portwatch --json watch`
-- 只监听一个端口：`portwatch watch 8080`
-- 按进程、PID 或状态筛选：`portwatch --process node`、`portwatch --pid 1234`、`portwatch --state LISTENING`
-- 查看 PID 详情及其端口：`portwatch info 1234`
-- JSON 查看 PID 详情：`portwatch --json info 1234`
-- 交互式终端界面：`portwatch tui`、聚焦端口：`portwatch tui 8080`
-- 卸载自身：`portwatch uninstall`（`--yes` 跳过确认）
-- `--help`、`--version` 和 `--protocol tcp|udp|all`
-
-`free` 会先显示进程详情并要求输入 `y` 或 `yes`，终止后重新扫描端口；直接回车或输入其他内容都会取消操作。
-
-`pw` 是 `portwatch` 的短别名：安装时额外构建一份 `pw.exe`，行为完全一致，
-帮助与错误前缀会跟随程序名显示 `pw`。（`pw` 在 FreeBSD 上是用户/组管理命令，
-Windows/Linux 下无冲突。）
-
-## Windows 安装
-
-一键安装（从 GitHub Release 下载对应架构的 zip，校验 SHA256 后装入
-`%USERPROFILE%\bin` 并按需补充用户 PATH）：
+[![version](https://img.shields.io/badge/version-v0.7.0-blue)](https://github.com/MY-Final/portWatch/releases)
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-607D8B)](#-平台支持)
+[![dist](https://img.shields.io/badge/dist-single%20binary-2E7D32)](https://github.com/MY-Final/portWatch/releases)
 
 ```powershell
 irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1 | iex
 ```
 
-管道执行无法向脚本传参（`iex` 只接收整段脚本文本），需要带参数时改用：
+</div>
+
+> [!NOTE]
+> **日常用 `pw` 就够了。** `pw` 是 `portwatch` 的等价短别名（同一份程序，按调用名显示帮助与错误前缀），
+> 安装脚本会同时装好 `portwatch` 和 `pw`。本文示例统一写 `pw`，换成 `portwatch` 行为完全一致。
+> （`pw` 仅在 FreeBSD 上与系统命令撞名，Windows/Linux/macOS 无冲突。）
+
+## ✨ 特性
+
+| | |
+| --- | --- |
+| 🔍 **查端口** | 单个 / 范围 / 集合查询，按进程名、PID、状态筛选；Windows 额外支持 UDP（`--protocol udp\|all`） |
+| 👀 **找进程** | 端口 → PID → 命令行 / 可执行文件 / 工作目录；`find` 按进程名反查端口 |
+| 🔥 **释放端口** | `free` / `kill` 先展示进程详情再确认，终止后自动验证端口已释放 |
+| 📡 **实时监控** | `watch` 增量报告端口上下线，`--interval` 自定义周期 |
+| 🖥️ **交互界面** | `tui` 一屏搞定：键盘导航、过滤、详情、终止确认 |
+| 🤖 **脚本友好** | 稳定 JSON 契约（`schema_version`）、JSON Lines 事件流、可复现退出码、GNU 风格参数交错 |
+| ⚡ **快** | Windows 直读进程 PEB，不拉起 PowerShell/WMI，上百端口的进程信息毫秒级返回 |
+| 🧹 **干净卸载** | `pw uninstall` 自清理，保守处理用户 PATH |
+
+## 📦 安装
+
+### Windows（PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1 | iex
+```
+
+从 Release 下载对应架构的 zip，SHA256 校验后装入 `%USERPROFILE%\bin`，按需补充用户 PATH。
+管道方式无法向脚本传参（`iex` 只接收整段脚本文本），需要带参数时改用：
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1))) -Version v0.7.0
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MY-Final/portWatch/main/install.ps1))) -Uninstall
 ```
 
-linux/macOS 对应 `curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | bash`
-（可用 `PORTWATCH_VERSION=v0.7.0` 固定版本）。
+### Linux / macOS
 
-也可以从源码安装。要求 Windows 和 Go 1.22 或更新版本，在项目根目录执行：
+```bash
+curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | bash
+# 固定版本：
+curl -fsSL https://raw.githubusercontent.com/MY-Final/portWatch/main/install.sh | PORTWATCH_VERSION=v0.7.0 bash
+```
+
+装入 `~/.local/bin`（不在 PATH 时只打印一行 export 提示，不改动 rc 文件）。
+
+### 从源码构建
+
+要求 Go 1.22+，在项目根目录执行：
+
+<details>
+<summary>展开构建与 PATH 配置命令</summary>
 
 ```powershell
 $bin = Join-Path $env:USERPROFILE "bin"
@@ -62,135 +75,110 @@ go build -o (Join-Path $bin "pw.exe") ./cmd/portwatch
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if (($userPath -split ';') -notcontains $bin) {
     [Environment]::SetEnvironmentVariable(
-        "Path",
-        (($userPath.TrimEnd(';') + ';' + $bin).Trim(';')),
-        "User"
+        "Path", (($userPath.TrimEnd(';') + ';' + $bin).Trim(';')), "User"
     )
 }
 ```
 
-关闭并重新打开 PowerShell，然后验证：
+重新打开 PowerShell 后 `pw --version` 验证。
 
-```powershell
-Get-Command portwatch
-portwatch --version
-portwatch 8080
+</details>
+
+## 🚀 快速开始
+
+```text
+$ pw 5173
+PORT  PROTOCOL STATE     PID   PROCESS NAME COMMAND                                            EXECUTABLE PATH      SERVICE
+5173  TCP      LISTENING 23184 node.exe    node D:\proj\web\node_modules\vite\bin\vite.js   node.exe             Vite
+
+$ pw find node
+PID   PROCESS      PORTS
+23184 node.exe     5173
+
+$ pw free 5173
+PORT  PROTOCOL STATE     PID   PROCESS NAME ...
+5173  TCP      LISTENING 23184 node.exe    ...
+Kill 1 process(es) listening on port 5173? [y/N] y
+Verifying port release...
+Port 5173 is now available.
 ```
 
-如果查询或终止进程时出现 `access denied`，请使用“以管理员身份运行”的 PowerShell。
+查询或终止系统进程时出现 `access denied`，用「以管理员身份运行」的终端重试即可。
 
-## 卸载
+## 📖 命令总览
 
-三种方式任选其一：
+| 命令 | 说明 |
+| --- | --- |
+| `pw` | 列出全部 TCP `LISTENING` 端口 |
+| `pw <port>` | 查询一个端口（如 `pw 8080`） |
+| `pw <start>-<end>` | 查询端口范围（如 `pw 3000-4000`） |
+| `pw --ports 3000,8080,8848` | 查询指定端口集合 |
+| `pw free <port>` | 确认后终止占用端口的进程并验证释放 |
+| `pw kill <pid>` | 确认后按 PID 终止进程并验证 |
+| `pw find <name>` | 按进程名搜索及其监听端口 |
+| `pw info <pid>` | 查看 PID 详情（命令行 / 路径 / 工作目录）及其端口 |
+| `pw watch [port]` | 实时报告监听端口变化，Ctrl+C 退出 |
+| `pw tui [port]` | 交互式终端界面，可聚焦单个端口 |
+| `pw uninstall` | 卸载自身（`--yes` 跳过确认） |
+| `pw --help` / `pw --version` | 帮助与版本 |
 
-1. 命令行卸载（推荐）：`portwatch uninstall`。先显示将要删除的二进制路径，输入 `y`/`yes` 确认，
-   回车或其他输入取消（退出码 0）；`--yes` 跳过确认。Windows 下运行中的 exe 无法直接删除，
-   会先把自身改名为 `portwatch.uninstalling.exe`，再由分离进程在主进程退出后延迟删除。
-   PATH 清理是保守的：只有当二进制位于默认安装目录（`%USERPROFILE%\bin` / `~/.local/bin`）
-   且删除后该目录为空时，才从用户级 PATH 移除该目录；否则只打印残留目录位置，
-   绝不触碰系统级 PATH。unix 没有统一的用户级 PATH 存储，只提示需要从 shell 配置移除的行。
-2. 脚本卸载：`.\install.ps1 -Uninstall`（Windows）、`./install.sh --uninstall`（linux/macOS）。
-   未安装时输出 `already uninstalled` 并以退出码 0 结束；文件被占用时报错并提示先关闭 portwatch 进程。
-3. 手动卸载：删除 `%USERPROFILE%\bin\portwatch.exe`（及 `pw.exe`）或 `~/.local/bin/portwatch`，
-   目录清空后按需从用户 PATH 移除对应条目。
+### 全局选项
 
-## 使用示例
+| 选项 | 说明 |
+| --- | --- |
+| `--json` | 输出稳定 JSON（端口 / 搜索 / 详情 / watch 事件） |
+| `--yes` | 跳过确认提示（`free` / `kill` / `uninstall`） |
+| `--protocol tcp\|udp\|all` | 协议选择；UDP 仅 Windows 支持 |
+| `--process <name>` | 按进程名筛选 |
+| `--pid <p1,p2>` | 按 PID 集合筛选 |
+| `--state <state>` | 按端口状态筛选（如 `LISTENING`） |
+| `--interval <duration>` | `watch` 轮询周期（默认 `1s`） |
+
+选项与位置参数可任意交错（GNU 风格）：`pw --json 8080`、`pw 8080 --json`、`pw find node --json`
+均合法；`--flag value` 与 `--flag=value` 两种写法都支持。
+
+## 🧭 更多示例
 
 ```powershell
-# 查看 8080 端口
-portwatch 8080
+# 全部监听端口
+pw
 
-# 查看 3000 到 4000 范围内的监听端口
-portwatch 3000-4000
+# UDP 绑定端口（Windows）
+pw --protocol udp
 
-# 查看指定端口集合
-portwatch --ports 3000,8080,8848
+# 只看 node 进程监听的端口
+pw --process node
 
-# 查看 UDP 绑定端口（Windows）
-portwatch --protocol udp
+# 按 PID / 状态筛选
+pw --pid 1234
+pw --state LISTENING
 
-# 查看 TCP 和 UDP 端口（Windows）
-portwatch --protocol all
+# PID 详情
+pw info 1234
 
-# 查看全部监听端口
-portwatch
+# 每 2 秒报告端口变化
+pw --interval 2s watch
 
-# 输出稳定 JSON，适合脚本处理
-portwatch --json 8080
-
-# 每 2 秒报告新增或移除的监听端口，按 Ctrl+C 退出
-portwatch --interval 2s watch
-
-# 只监控 8080 端口
-portwatch watch 8080
-
-# 以 JSON Lines 输出端口变化
-portwatch --json watch
-
-# 搜索名称包含 node 的进程
-portwatch find node
-
-# 以 JSON 搜索名称包含 node 的进程
-portwatch --json find node
-
-# 只查看 node 进程监听的端口
-portwatch --process node
-
-# 查看 PID 详情和它占用的端口
-portwatch info 1234
-
-# 以 JSON 输出 PID 详情
-portwatch --json info 1234
-
-# 启动交互式终端界面
-portwatch tui
-
-# 只关注一个端口
-portwatch tui 8080
-
-# 终止指定 PID（会要求确认）
-portwatch kill 1234
-
-# 释放 8080 端口（会要求确认并验证）
-portwatch free 8080
+# 只监控 8080
+pw watch 8080
 ```
 
-### JSON 契约
+### JSON 输出
 
-JSON 响应顶层包含 `schema_version`。当前版本为 `"2"`，端口结果可能包含可选的
-`service` 对象（例如 `name: "Vite"`）；脚本应先检查 schema 版本，再读取新增字段。
-空结果使用空数组，例如：
+`--json` 的端口响应顶层带 `schema_version`（当前 `"2"`），空结果用空数组，字段只增不改：
 
 ```json
 {"schema_version":"2","ports":[]}
 ```
 
-`--json free` 和 `--json find <name>` 也使用同一个 schema 版本字段。
-`--json watch` 使用 JSON Lines：每行是一个独立事件对象，包含 `event`、`observed_at`、端口、协议、PID 和进程名。
-
-`--json info <pid>` 使用独立的进程详情 schema（当前为 `"1"`），返回
-`process` 对象及其 `ports` 数组；它不会改变端口响应的 schema `"2"`。
-
-### TUI 快速用法
-
-TUI 默认只显示 TCP `LISTENING` 端口，适合先解决“端口被谁占用”。最短操作路径是：
-
-```text
-portwatch tui
-  Up/Down 选择端口（方向键异常时，u 上移、j 下移）
-  Enter   查看详情
-  K       打开终止确认
-  Enter   确认，Esc 取消
-```
-
-常用辅助操作：`/` 按端口、PID 或进程名过滤，`R` 刷新，`V` 选择
-Listening/Connections/All，`?` 查看完整帮助，`Q` 退出。终止后 PortWatch
-会验证 PID 已退出并检查端口是否释放。遇到 `Access denied` 时请用管理员权限
-重新打开 PowerShell。
+- 端口记录含可选 `service` 对象（如 `{"name":"Vite","type":"Node.js","confidence":95}`），
+  脚本应先检查 schema 版本再读取新增字段；
+- `--json find <name>`、`--json free <port>` 复用同一版本字段；
+- `--json info <pid>` 使用独立的进程详情 schema（当前 `"1"`）；
+- `--json watch` 输出 JSON Lines：每行一个独立事件对象
+  （`event`、`observed_at`、端口、协议、PID、进程名）。
 
 ### 退出码
-
-脚本可以依赖以下稳定退出码：
 
 | 退出码 | 含义 |
 | --- | --- |
@@ -200,30 +188,59 @@ Listening/Connections/All，`?` 查看完整帮助，`Q` 退出。终止后 Port
 | `4` | 权限不足（含卸载时二进制被占用） |
 | `5` | Kill 失败、关键 PID 拒绝或 Kill 后验证失败 |
 
-全局选项与位置参数可以任意交错（GNU 风格）：`portwatch --json 8080`、
-`portwatch 8080 --json` 和 `portwatch find node --json` 均合法。
-`--flag value` 与 `--flag=value` 两种写法也都支持。
+## 🖥️ TUI
 
-## 平台说明
+`pw tui`（或 `pw tui 8080` 聚焦单个端口）默认进入 TCP `LISTENING` 视图：
 
-Windows 使用 IP Helper API 扫描 IPv4/IPv6 TCP 监听端口，并通过 Windows
-进程 API 直接读取进程参数（PEB）获取命令行、可执行文件和工作目录，
-不依赖 PowerShell/WMI 等外部进程。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
-这两个平台的实现已包含在代码中，但建议在目标系统上单独验证权限和命令可用性。
+| 按键 | 操作 |
+| --- | --- |
+| `↑` `↓`（备用 `u` `j`） | 选择端口 |
+| `Enter` | 查看进程详情 |
+| `K` | 打开终止确认（`Enter` 确认，`Esc` 取消） |
+| `/` | 按端口、PID 或进程名过滤 |
+| `R` | 刷新 |
+| `V` | 切换 Listening / Connections / All 视图 |
+| `?` | 完整帮助 |
+| `Esc` / `Q` | 返回 / 退出 |
 
-Windows CLI 支持 TCP 监听端口和 UDP 绑定端口，`--protocol` 可选 `tcp`、`udp` 或 `all`；Linux/macOS 当前只实现 TCP，使用 UDP 时会返回明确的不支持错误，错误文案会注明"仅 Windows 支持该协议，当前平台为 <os>"。TUI 可以通过 `portwatch tui` 或 `portwatch tui 8080` 显式启动，并默认进入 TCP `LISTENING` 视图；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
+终止后 PortWatch 会验证 PID 已退出且端口已释放。
 
-### 能力矩阵
+## 📊 平台支持
 
 | 能力 | Windows | Linux | macOS |
 | --- | --- | --- | --- |
 | TCP 监听端口 | ✓ | ✓ | ✓（依赖 `lsof`） |
-| TCP 连接（非 LISTENING 状态） | ✓ | ✗ | ✗ |
+| TCP 连接（非 LISTENING） | ✓ | ✗ | ✗ |
 | UDP 绑定端口 | ✓ | ✗ | ✗ |
 | 进程命令行 | ✓（直读 PEB） | ✓（`/proc/<pid>/cmdline`） | ✓（依赖 `ps`） |
 | 进程工作目录 | ✓（直读 PEB） | ✗ | ✗ |
 
-## 开发
+- **Windows**：IP Helper API 扫描 IPv4/IPv6，进程信息直接读取 PEB，无 PowerShell/WMI 依赖；
+- **Linux**：`/proc`（单次遍历构建 inode→PID 映射）；
+- **macOS**：`lsof` + `ps`。
+
+非 Windows 平台使用 `--protocol udp` 时会返回明确错误，文案注明仅 Windows 支持及当前平台名。
+
+## 🧹 卸载
+
+| 方式 | 命令 |
+| --- | --- |
+| 命令行（推荐） | `pw uninstall`（或 `portwatch uninstall`，各自删除自身） |
+| 安装脚本 | `.\install.ps1 -Uninstall`（Windows）/ `./install.sh --uninstall`（Linux/macOS），两个别名一并清理 |
+| 手动 | 删除 `%USERPROFILE%\bin\portwatch.exe`、`pw.exe`（或 `~/.local/bin/` 下同名文件），目录清空后按需从用户 PATH 移除 |
+
+<details>
+<summary>卸载行为细节</summary>
+
+- 确认交互与 `free`/`kill` 一致：显示将要删除的路径，`y`/`yes` 确认，回车取消（退出码 0），`--yes` 跳过；
+- Windows 下运行中的 exe 无法直接删除：先改名为 `<name>.uninstalling.exe`，由分离进程在主进程退出后延迟删除；
+- PATH 清理是保守的：仅当二进制位于默认安装目录（`%USERPROFILE%\bin` / `~/.local/bin`）且删除后为空时，
+  才从用户级 PATH 移除该目录，绝不触碰系统级 PATH；unix 无统一用户级 PATH 存储，只提示需从 shell 配置移除的行；
+- 脚本卸载在未安装时输出 `already uninstalled` 并以退出码 0 结束。
+
+</details>
+
+## 🔧 开发
 
 ```powershell
 go test ./...
@@ -239,10 +256,9 @@ $env:GOOS = "linux";   $env:GOARCH = "amd64"; go build ./cmd/portwatch
 $env:GOOS = "darwin";  $env:GOARCH = "arm64"; go build ./cmd/portwatch
 ```
 
-发布配置位于 `.goreleaser.yaml`，CI 配置位于 `.github/workflows/`。
+发布配置见 [`.goreleaser.yaml`](.goreleaser.yaml)，CI 见 [`.github/workflows/`](.github/workflows/)；
+开发任务与产品规划见 [`task/`](task/) 与 [`prd/`](prd/)。
 
-## 任务规划
+## 许可
 
-开发任务和后续阶段见 [`task/README.md`](task/README.md) 与 [`task/INDEX.md`](task/INDEX.md)。
-V4 产品范围、退出码、安全边界和后续任务拆分见 [`prd/v4.md`](prd/v4.md)。
-下一轮 TUI 的端口诊断工作流和交互边界见 [`prd/v6-guided-tui.md`](prd/v6-guided-tui.md)。
+暂未声明开源协议；如需引入第三方使用，请先联系作者。
