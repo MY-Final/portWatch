@@ -27,6 +27,10 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 
 `free` 会先显示进程详情并要求输入 `y` 或 `yes`，终止后重新扫描端口；直接回车或输入其他内容都会取消操作。
 
+`pw` 是 `portwatch` 的短别名：安装时额外构建一份 `pw.exe`，行为完全一致，
+帮助与错误前缀会跟随程序名显示 `pw`。（`pw` 在 FreeBSD 上是用户/组管理命令，
+Windows/Linux 下无冲突。）
+
 ## Windows 安装
 
 要求 Windows 和 Go 1.22 或更新版本。在项目根目录执行：
@@ -35,6 +39,7 @@ PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以
 $bin = Join-Path $env:USERPROFILE "bin"
 New-Item -ItemType Directory -Force $bin | Out-Null
 go build -o (Join-Path $bin "portwatch.exe") ./cmd/portwatch
+go build -o (Join-Path $bin "pw.exe") ./cmd/portwatch
 
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if (($userPath -split ';') -notcontains $bin) {

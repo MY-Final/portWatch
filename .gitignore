@@ -14,3 +14,5 @@ coverage.out
 coverage.html
 *.coverprofile
 tmp/
+/pw
+/pw.exe

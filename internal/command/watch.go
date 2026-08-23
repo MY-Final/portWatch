@@ -39,7 +39,7 @@ func watchOutput(ctx context.Context, scanner port.Scanner, manager process.Mana
 	return (watch.Engine{
 		Scanner: scanner, Interval: interval,
 		OnScanError: func(err error) error {
-			_, writeErr := fmt.Fprintf(errOut, "portwatch: watch scan failed: %v\n", err)
+			_, writeErr := fmt.Fprintf(errOut, "%s: watch scan failed: %v\n", BinaryName, err)
 			return writeErr
 		},
 		Enrich: func(record model.PortInfo) model.PortInfo {

@@ -217,9 +217,9 @@ func run(ctx context.Context, args []string, deps Dependencies, stdin io.Reader,
 	if err != nil {
 		var parseErr *ParseError
 		if errors.As(err, &parseErr) {
-			_, _ = fmt.Fprintf(stderr, "portwatch: %s\nusage: portwatch [flags] [port]\n       portwatch tui [port]\n", parseErr)
+			_, _ = fmt.Fprintf(stderr, "%s: %s\nusage: %s [flags] [port]\n       %s tui [port]\n", BinaryName, parseErr, BinaryName, BinaryName)
 		} else {
-			_, _ = fmt.Fprintf(stderr, "portwatch: %s\n", err)
+			_, _ = fmt.Fprintf(stderr, "%s: %s\n", BinaryName, err)
 		}
 		return ExitCode(err)
 	}

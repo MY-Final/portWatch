@@ -68,7 +68,7 @@ func PrintError(w io.Writer, err error) {
 	}
 
 	message := errorMessage(err)
-	_, _ = fmt.Fprintf(w, "portwatch: %s\n", message)
+	_, _ = fmt.Fprintf(w, "%s: %s\n", BinaryName, message)
 }
 
 func errorMessage(err error) string {

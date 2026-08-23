@@ -10,7 +10,11 @@ import (
 )
 
 // Version is overridden by the release build through main.version.
-var Version = "0.5.0"
+var Version = "0.6.0"
+
+// BinaryName is the name portwatch was invoked as, so a copy or link named
+// pw.exe prints pw in usage and error prefixes. main sets it from argv[0].
+var BinaryName = "portwatch"
 
 type flagOptions struct {
 	Protocol   string
@@ -44,7 +48,7 @@ func parseFlags(args []string) (flagOptions, []string, error) {
 			options.StateSet = true
 		}
 	}
-	set := flag.NewFlagSet("portwatch", flag.ContinueOnError)
+	set := flag.NewFlagSet(BinaryName, flag.ContinueOnError)
 	set.SetOutput(io.Discard)
 	set.StringVar(&options.Protocol, "protocol", "tcp", "network protocol")
 	set.StringVar(&options.Ports, "ports", "", "comma-separated ports")
