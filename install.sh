@@ -38,6 +38,12 @@ if [ "$UNINSTALL" -eq 1 ]; then
   say "Deleting $target"
   rm -f "$target" || die "failed to delete $target; close running portwatch processes and retry"
   if [ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
+    # rmdir only removes empty directories, so other tools in ~/.local/bin
+    # keep it alive and the failure is silently ignored.
+    if rmdir "$INSTALL_DIR" 2>/dev/null; then
+      echo "Removed empty directory $INSTALL_DIR."
+    fi
+  else
     echo "If $INSTALL_DIR was added to PATH in your shell profile, remove that line too."
   fi
   echo "portwatch uninstalled."

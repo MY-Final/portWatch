@@ -120,6 +120,12 @@ if ($Uninstall) {
     $remaining = @(Get-ChildItem -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue)
     if ($remaining.Count -eq 0) {
         Remove-UserPathEntry $InstallDir
+        # No -Recurse: Remove-Item on a non-empty directory fails, so a file
+        # that appears between the count and this call keeps the directory.
+        Remove-Item -LiteralPath $InstallDir -ErrorAction SilentlyContinue
+        if (-not (Test-Path -LiteralPath $InstallDir)) {
+            Write-Host "Removed empty directory $InstallDir."
+        }
     }
     Write-Host "portwatch uninstalled."
     exit 0
