@@ -97,12 +97,26 @@ $ pw find node
 PID   PROCESS      PORTS
 23184 node.exe     5173
 
+$ pw info 23184
+FIELD                VALUE
+PID                  23184
+PROCESS NAME         node.exe
+PARENT CHAIN         node.exe (23184) ← npm.exe (21000) ← Code.exe (5678)
+EXECUTABLE PATH      C:\Program Files\nodejs\node.exe
+COMMAND              node D:\proj\web\node_modules\vite\bin\vite.js
+WORKING DIRECTORY    D:\proj\web
+USER                 -
+PORTS                5173
+
 $ pw free 5173
 PORT  PROTOCOL STATE     PID   PROCESS NAME ...
 5173  TCP      LISTENING 23184 node.exe    ...
 Kill 1 process(es) listening on port 5173? [y/N] y
 Verifying port release...
 Port 5173 is now available.
+
+$ pw --expect occupied --timeout 30s wait 5173
+Port 5173 is occupied.
 ```
 
 查询或终止系统进程时出现 `access denied`，用「以管理员身份运行」的终端重试即可。
@@ -118,7 +132,7 @@ Port 5173 is now available.
 | `pw free <port>` | 确认后终止占用端口的进程并验证释放 |
 | `pw kill <pid>` | 确认后按 PID 终止进程并验证 |
 | `pw find <name>` | 按进程名搜索及其监听端口 |
-| `pw info <pid>` | 查看 PID 详情（命令行 / 路径 / 工作目录）及其端口 |
+| `pw info <pid>` | 查看 PID 详情（命令行 / 路径 / 工作目录 / 父进程链）及其端口 |
 | `pw watch [port]` | 实时报告监听端口变化，Ctrl+C 退出 |
 | `pw wait <port>` | 阻塞等待端口空闲（`--expect occupied` 等被占用，`--timeout` 限时可选） |
 | `pw tui [port]` | 交互式终端界面，可聚焦单个端口 |
@@ -185,9 +199,15 @@ pw --expect occupied --timeout 30s wait 8080
 - 端口记录含可选 `service` 对象（如 `{"name":"Vite","type":"Node.js","confidence":95}`），
   脚本应先检查 schema 版本再读取新增字段；
 - `--json find <name>`、`--json free <port>` 复用同一版本字段；
-- `--json info <pid>` 使用独立的进程详情 schema（当前 `"1"`）；
+- `--json info <pid>` 使用独立的进程详情 schema（当前 `"1"`）；v0.8.0 起进程对象含纯加法字段
+  `parent_pid` 与 `ancestors`（`[{"pid":21000,"name":"npm.exe"},...]`，最多 8 级）；
 - `--json watch` 输出 JSON Lines：每行一个独立事件对象
-  （`event`、`observed_at`、端口、协议、PID、进程名）。
+  （`event`、`observed_at`、端口、协议、PID、进程名）；
+- `--json wait <port>` 结束时输出单个事件对象（无 schema 版本）：
+
+```json
+{"event":"port_free","observed_at":"2026-08-23T15:30:00+08:00","port":5173,"protocol":"TCP"}
+```
 
 ### 退出码
 
@@ -215,7 +235,9 @@ pw --expect occupied --timeout 30s wait 8080
 | `?` | 完整帮助 |
 | `Esc` / `Q` | 返回 / 退出 |
 
-终止后 PortWatch 会验证 PID 已退出且端口已释放。
+终止后 PortWatch 会验证 PID 已退出且端口已释放。详情页会展示该进程的父进程链
+（与 `pw info` 同款 `node.exe (23184) ← npm.exe (21000)` 一行）；Linux 上 `V` 切换
+Connections/All 视图可看全部 TCP 状态，macOS 暂仅 LISTENING 视图。
 
 ## 📊 平台支持
 
