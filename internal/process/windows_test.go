@@ -6,43 +6,22 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestParseMetadata(t *testing.T) {
-	metadata, err := parseMetadata([]byte(`{"Name":"go.exe","CommandLine":"go test","WorkingDirectory":"C:\\src"}`))
-	if err != nil {
-		t.Fatalf("parseMetadata() error = %v", err)
+func TestReadPointer(t *testing.T) {
+	if sizePointer == 8 {
+		raw := []byte{0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB, 0x89}
+		if got, want := readPointer(raw), uintptr(0x89ABCDEF12345678); got != want {
+			t.Fatalf("readPointer() = %#x, want %#x", got, want)
+		}
+		return
 	}
-	if metadata.Name != "go.exe" || metadata.CommandLine != "go test" || metadata.WorkingDir != `C:\src` {
-		t.Fatalf("parseMetadata() = %+v", metadata)
-	}
-}
-
-func TestParseMetadataErrors(t *testing.T) {
-	tests := []struct {
-		name string
-		data string
-		want error
-	}{
-		{name: "null", data: "null", want: ErrProcessNotFound},
-		{name: "empty", data: "", want: ErrProcessNotFound},
-		{name: "invalid json", data: "{", want: nil},
-		{name: "missing name", data: `{"CommandLine":"go test"}`, want: nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseMetadata([]byte(tt.data))
-			if tt.want != nil {
-				if !errors.Is(err, tt.want) {
-					t.Fatalf("parseMetadata() error = %v, want %v", err, tt.want)
-				}
-				return
-			}
-			if err == nil {
-				t.Fatal("parseMetadata() error = nil, want error")
-			}
-		})
+	raw := []byte{0x78, 0x56, 0x34, 0x12}
+	if got, want := readPointer(raw), uintptr(0x12345678); got != want {
+		t.Fatalf("readPointer() = %#x, want %#x", got, want)
 	}
 }
 
@@ -55,6 +34,23 @@ func TestWindowsManagerInfoCurrentProcess(t *testing.T) {
 	if info.PID != os.Getpid() || info.Name == "" || info.Executable == "" {
 		t.Fatalf("Info(current pid) = %+v", info)
 	}
+	if want := filepath.Base(info.Executable); info.Name != want {
+		t.Fatalf("Info(current pid).Name = %q, want %q", info.Name, want)
+	}
+	if !strings.Contains(strings.ToLower(info.Command), "process.test") {
+		t.Fatalf("Info(current pid).Command = %q, want substring process.test", info.Command)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+	if !strings.EqualFold(trimTrailingSeparators(info.WorkingDir), trimTrailingSeparators(cwd)) {
+		t.Fatalf("Info(current pid).WorkingDir = %q, want %q", info.WorkingDir, cwd)
+	}
+}
+
+func trimTrailingSeparators(path string) string {
+	return strings.TrimRight(path, `\/`)
 }
 
 func TestWindowsManagerInfoMissingProcess(t *testing.T) {

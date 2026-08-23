@@ -4,12 +4,10 @@ package process
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
+	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/sys/windows"
@@ -17,8 +15,11 @@ import (
 	"github.com/portwatch/portwatch/pkg/model"
 )
 
-// WindowsManager reads process information using the Windows process API and
-// WMI. It has no mutable state and is safe to share between callers.
+// WindowsManager reads process information through the Windows process API:
+// the executable path via QueryFullProcessImageName and the command line and
+// working directory from the process parameters in the PEB. No child
+// processes are spawned. It has no mutable state and is safe to share
+// between callers.
 type WindowsManager struct{}
 
 // NewManager returns the native process manager for Windows.
@@ -26,14 +27,17 @@ func NewManager() *WindowsManager {
 	return &WindowsManager{}
 }
 
-// Info returns the executable path from the process API and the remaining
-// metadata from Win32_Process.
+// Info reads the executable path, command line and working directory from
+// the process itself.
 func (WindowsManager) Info(ctx context.Context, pid int) (model.ProcessInfo, error) {
 	if err := ValidatePID(pid); err != nil {
 		return model.ProcessInfo{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return model.ProcessInfo{}, err
+	}
 
-	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_VM_READ, false, uint32(pid))
 	if err != nil {
 		return model.ProcessInfo{}, mapProcessError("open process", pid, err)
 	}
@@ -44,11 +48,11 @@ func (WindowsManager) Info(ctx context.Context, pid int) (model.ProcessInfo, err
 		return model.ProcessInfo{}, fmt.Errorf("query executable for pid %d: %w", pid, err)
 	}
 
-	metadata, err := queryMetadata(ctx, pid)
+	parameters, err := queryProcessParameters(handle, pid)
 	if err != nil {
 		return model.ProcessInfo{}, err
 	}
-	return model.NewProcessInfo(pid, metadata.Name, executable, metadata.CommandLine, metadata.WorkingDir, "")
+	return model.NewProcessInfo(pid, filepath.Base(executable), executable, parameters.CommandLine, parameters.CurrentDirectory, "")
 }
 
 // Exists reports whether a process can be opened for query. The handle is
@@ -137,66 +141,6 @@ func (m WindowsManager) Terminate(ctx context.Context, pid int) error {
 
 const pollIntervalMilliseconds = 50
 
-type processMetadata struct {
-	Name        string `json:"Name"`
-	CommandLine string `json:"CommandLine"`
-	WorkingDir  string `json:"WorkingDirectory"`
-}
-
-const metadataScript = `& {
-  param([int]$ProcessId)
-  $ErrorActionPreference = 'Stop'
-  $process = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId = {0}" -f $ProcessId) | Select-Object -First 1
-  if ($null -eq $process) {
-    'null'
-    return
-  }
-  [pscustomobject]@{
-    Name = $process.Name
-    CommandLine = $process.CommandLine
-    WorkingDirectory = $process.WorkingDirectory
-  } | ConvertTo-Json -Compress
-}`
-
-func queryMetadata(ctx context.Context, pid int) (processMetadata, error) {
-	// Arguments placed after the command script are bound to its param block.
-	// The powershell.exe -Args switch does not bind parameters for this form.
-	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", metadataScript, strconv.Itoa(pid))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if ctx.Err() != nil {
-			return processMetadata{}, ctx.Err()
-		}
-		if strings.Contains(strings.ToLower(string(output)), "access is denied") {
-			return processMetadata{}, fmt.Errorf("query WMI metadata for pid %d: %w", pid, ErrAccessDenied)
-		}
-		return processMetadata{}, fmt.Errorf("query WMI metadata for pid %d: %w", pid, err)
-	}
-	metadata, err := parseMetadata(output)
-	if err != nil {
-		if errors.Is(err, ErrProcessNotFound) {
-			return processMetadata{}, fmt.Errorf("query WMI metadata for pid %d: %w", pid, err)
-		}
-		return processMetadata{}, fmt.Errorf("parse WMI metadata for pid %d: %w", pid, err)
-	}
-	return metadata, nil
-}
-
-func parseMetadata(data []byte) (processMetadata, error) {
-	trimmed := strings.TrimSpace(string(data))
-	if trimmed == "" || trimmed == "null" {
-		return processMetadata{}, ErrProcessNotFound
-	}
-	var metadata processMetadata
-	if err := json.Unmarshal([]byte(trimmed), &metadata); err != nil {
-		return processMetadata{}, fmt.Errorf("decode JSON: %w", err)
-	}
-	if metadata.Name == "" {
-		return processMetadata{}, errors.New("decoded process metadata has no name")
-	}
-	return metadata, nil
-}
-
 func queryExecutable(handle windows.Handle) (string, error) {
 	for size := uint32(260); size <= 32768; size *= 2 {
 		buffer := make([]uint16, size)
@@ -222,6 +166,10 @@ func mapProcessError(operation string, pid int, err error) error {
 	case errors.Is(err, windows.ERROR_ACCESS_DENIED):
 		return fmt.Errorf("%s%s: %w", operation, suffix, ErrAccessDenied)
 	case errors.Is(err, windows.ERROR_INVALID_PARAMETER), errors.Is(err, windows.ERROR_INVALID_HANDLE):
+		return fmt.Errorf("%s%s: %w", operation, suffix, ErrProcessNotFound)
+	case errors.Is(err, windows.ERROR_PARTIAL_COPY):
+		// ReadProcessMemory reports a partial copy when the target exits
+		// between opening the handle and reading its memory.
 		return fmt.Errorf("%s%s: %w", operation, suffix, ErrProcessNotFound)
 	default:
 		return fmt.Errorf("%s%s: %w", operation, suffix, err)

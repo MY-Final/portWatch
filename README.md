@@ -3,7 +3,7 @@
 PortWatch 是一个面向开发者的端口诊断与进程管理 CLI。它可以查询 TCP
 监听端口对应的 PID、进程名、命令行和可执行文件路径，也可以在确认后终止占用端口的进程。
 
-当前版本：`v0.5.0`
+当前版本：`v0.6.0`
 
 ## 当前支持
 
@@ -168,7 +168,8 @@ Listening/Connections/All，`?` 查看完整帮助，`Q` 退出。终止后 Port
 ## 平台说明
 
 Windows 使用 IP Helper API 扫描 IPv4/IPv6 TCP 监听端口，并通过 Windows
-进程 API 和 WMI 获取进程详情。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
+进程 API 直接读取进程参数（PEB）获取命令行、可执行文件和工作目录，
+不依赖 PowerShell/WMI 等外部进程。Linux 使用 `/proc`，macOS 使用 `lsof`/`ps`；
 这两个平台的实现已包含在代码中，但建议在目标系统上单独验证权限和命令可用性。
 
 Windows CLI 支持 TCP 监听端口和 UDP 绑定端口，`--protocol` 可选 `tcp`、`udp` 或 `all`；Linux/macOS 当前只实现 TCP，使用 UDP 时会返回明确的不支持错误。TUI 可以通过 `portwatch tui` 或 `portwatch tui 8080` 显式启动，并默认进入 TCP `LISTENING` 视图；端口表格和端口 JSON 会提供可选的开发服务识别结果，无法确认时显示 `Unknown`。
