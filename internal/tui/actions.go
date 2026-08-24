@@ -54,7 +54,7 @@ func (m Model) handleListKey(key tea.KeyMsg) (Model, tea.Cmd) {
 	case "j":
 		m.moveSelection(1)
 	case "r":
-		m.Status = "Refreshing..."
+		m.Status = statusRefreshing
 		return m, m.refresh()
 	case "/":
 		m.Filtering = true
@@ -62,7 +62,7 @@ func (m Model) handleListKey(key tea.KeyMsg) (Model, tea.Cmd) {
 	case "enter":
 		if record, ok := m.selectedRecord(); ok {
 			m.DetailRecord = record
-			m.Detail = "Process details"
+			m.Detail = detailsPageLabel
 			m.Page = pageDetails
 		}
 	case "k":
@@ -98,7 +98,7 @@ func (m Model) handleViewKey(key tea.KeyMsg) (Model, tea.Cmd) {
 	m.Scope = scope
 	m.ViewSelection = scope
 	m.Page = pageList
-	m.Status = "Loading " + scopeLabel(scope) + "..."
+	m.Status = fmt.Sprintf(statusLoadingFmt, scopeLabel(scope))
 	return m, m.refresh()
 }
 
@@ -115,7 +115,7 @@ func (m Model) handleDetailsKey(key tea.KeyMsg) (Model, tea.Cmd) {
 			m.ConfirmKill = true
 		}
 	case "r":
-		m.Status = "Refreshing..."
+		m.Status = statusRefreshing
 		return m, m.refresh()
 	case "?":
 		m.HelpReturn = pageDetails

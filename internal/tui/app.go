@@ -153,7 +153,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case portsFailedMsg:
 		m.NextStatus = ""
 		m.Err = value.err
-		m.Status = fmt.Sprintf("Refresh failed: %v", value.err)
+		m.Status = fmt.Sprintf(statusRefreshFailedFmt, value.err)
 	case killDoneMsg:
 		if value.err != nil {
 			m.ConfirmKill = false
@@ -165,8 +165,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Err = nil
 		m.ConfirmKill = false
 		m.Page = pageList
-		m.NextStatus = fmt.Sprintf("Process terminated. Port %d is available.", m.DetailRecord.Port)
-		m.Status = "Verifying PID and port release..."
+		m.NextStatus = fmt.Sprintf(statusKilledFmt, m.DetailRecord.Port)
+		m.Status = statusVerifying
 		return m, m.refresh()
 	}
 	return m, nil
@@ -191,44 +191,44 @@ func (m Model) viewList() string {
 	var b strings.Builder
 	m.writeHeader(&b)
 	if m.Err != nil && len(m.Ports) == 0 {
-		fmt.Fprintf(&b, "\nError: %s\n", cleanError(m.Err))
+		fmt.Fprintf(&b, errorLineFmt, cleanError(m.Err))
 	} else {
 		b.WriteString("\n")
 		m.writeTable(&b)
 	}
 	m.writeSelection(&b)
 	if m.Filtering {
-		fmt.Fprintf(&b, "\nFilter: %s_\n", m.Filter)
+		fmt.Fprintf(&b, filterPromptEditingFmt, m.Filter)
 	} else {
-		fmt.Fprintf(&b, "\nFilter: %s\n", displayFilter(m.Filter))
+		fmt.Fprintf(&b, filterPromptIdleFmt, displayFilter(m.Filter))
 	}
 	if m.Status != "" {
-		fmt.Fprintf(&b, "Status: %s\n", m.Status)
+		fmt.Fprintf(&b, statusLineFmt, m.Status)
 	}
 	m.writeHelp(&b)
 	return b.String()
 }
 
 func (m Model) writeHeader(b *strings.Builder) {
-	b.WriteString("PortWatch")
+	b.WriteString(appTitle)
 	if m.Version != "" {
-		fmt.Fprintf(b, "                                      v%s", m.Version)
+		fmt.Fprintf(b, headerVersionPaddingFmt, m.Version)
 	}
-	b.WriteString("\nPort & Process Manager\n")
+	b.WriteString(appSubtitle)
 	count := len(m.visibleIndexes())
-	updated := "not updated"
+	updated := headerNotUpdated
 	if !m.UpdatedAt.IsZero() {
-		updated = "Updated " + formatAge(m.UpdatedAt)
+		updated = headerUpdatedPrefix + formatAge(m.UpdatedAt)
 	}
 	label := scopeLabel(m.Scope)
 	if m.PortFilter > 0 {
-		label = fmt.Sprintf("%s · PORT %d", label, m.PortFilter)
+		label = fmt.Sprintf(headerScopePortFmt, label, m.PortFilter)
 	}
-	position := "no selection"
+	position := headerNoSelection
 	if len(m.visibleIndexes()) > 0 {
-		position = fmt.Sprintf("selected %d/%d", visiblePosition(m.visibleIndexes(), m.Selected)+1, count)
+		position = fmt.Sprintf(headerSelectedFmt, visiblePosition(m.visibleIndexes(), m.Selected)+1, count)
 	}
-	fmt.Fprintf(b, "\n%s · TCP                         %d results · %s · %s\n", label, count, updated, position)
+	fmt.Fprintf(b, headerSummaryFmt, label, count, updated, position)
 }
 
 func visiblePosition(indexes []int, selected int) int {
@@ -242,16 +242,16 @@ func visiblePosition(indexes []int, selected int) int {
 
 func (m Model) writeTable(b *strings.Builder) {
 	if m.Width >= 110 {
-		b.WriteString("PORT   PROTOCOL   STATE        PID      PROCESS\n")
+		b.WriteString(tableHeaderWide)
 	} else {
-		b.WriteString("PORT   PROTOCOL   PID      PROCESS\n")
+		b.WriteString(tableHeaderNarrow)
 	}
 	indexes := m.tableIndexes()
 	for _, index := range indexes {
 		record := m.Ports[index]
-		marker := "  "
+		marker := rowMarkerNormal
 		if index == m.Selected {
-			marker = "> "
+			marker = rowMarkerSelected
 		}
 		name := m.processName(record)
 		if m.Width >= 110 {
@@ -259,23 +259,23 @@ func (m Model) writeTable(b *strings.Builder) {
 			if nameWidth < 12 {
 				nameWidth = 12
 			}
-			fmt.Fprintf(b, "%s%-5d %-10s %-12s %-8d %s\n", marker, record.Port, display(record.Protocol), display(record.State), record.PID, fitText(name, nameWidth))
+			fmt.Fprintf(b, tableRowWideFmt, marker, record.Port, display(record.Protocol), display(record.State), record.PID, fitText(name, nameWidth))
 			continue
 		}
 		nameWidth := m.Width - 32
 		if nameWidth < 12 {
 			nameWidth = 12
 		}
-		fmt.Fprintf(b, "%s%-5d %-10s %-8d %s\n", marker, record.Port, display(record.Protocol), record.PID, fitText(name, nameWidth))
+		fmt.Fprintf(b, tableRowNarrowFmt, marker, record.Port, display(record.Protocol), record.PID, fitText(name, nameWidth))
 	}
 	if len(indexes) == 0 {
 		switch {
 		case strings.TrimSpace(m.Filter) != "":
-			fmt.Fprintf(b, "No match for %q.\n", m.Filter)
+			fmt.Fprintf(b, emptyNoMatchFmt, m.Filter)
 		case m.PortFilter > 0:
-			fmt.Fprintf(b, "Port %d is available.\n", m.PortFilter)
+			fmt.Fprintf(b, emptyPortFreeFmt, m.PortFilter)
 		default:
-			b.WriteString("No listening ports found.\n")
+			b.WriteString(emptyNoListeners)
 		}
 	}
 }
@@ -309,41 +309,41 @@ func (m Model) tableIndexes() []int {
 func (m Model) writeSelection(b *strings.Builder) {
 	record, ok := m.selectedRecord()
 	if !ok {
-		b.WriteString("Selected: -\n")
+		b.WriteString(selectionNone)
 		return
 	}
-	fmt.Fprintf(b, "Selected: %d · PID %d · %s\n", record.Port, record.PID, m.processName(record))
+	fmt.Fprintf(b, selectionFmt, record.Port, record.PID, m.processName(record))
 }
 
 func (m Model) viewDetails() string {
 	var b strings.Builder
 	m.writeHeader(&b)
-	b.WriteString("\nProcess Details\n")
+	b.WriteString(detailsTitle)
 	record := m.DetailRecord
 	info := m.Infos[record.PID]
 	fields := [][2]string{
-		{"Port", fmt.Sprint(record.Port)},
-		{"Protocol", display(record.Protocol)},
-		{"State", display(record.State)},
-		{"Local Address", display(record.LocalAddr)},
-		{"Remote Address", display(record.RemoteAddr)},
-		{"PID", fmt.Sprint(record.PID)},
-		{"Process Name", m.processName(record)},
-		{"Parent Chain", display(m.parentChain(info))},
-		{"Executable Path", display(info.Executable)},
-		{"Command Line", display(info.Command)},
-		{"Working Directory", display(info.WorkingDir)},
+		{fieldPort, fmt.Sprint(record.Port)},
+		{fieldProtocol, display(record.Protocol)},
+		{fieldState, display(record.State)},
+		{fieldLocalAddress, display(record.LocalAddr)},
+		{fieldRemoteAddress, display(record.RemoteAddr)},
+		{fieldPID, fmt.Sprint(record.PID)},
+		{fieldProcessName, m.processName(record)},
+		{fieldParentChain, display(m.parentChain(info))},
+		{fieldExecutablePath, display(info.Executable)},
+		{fieldCommandLine, display(info.Command)},
+		{fieldWorkingDir, display(info.WorkingDir)},
 	}
 	for _, field := range fields {
-		fmt.Fprintf(&b, "%-20s %s\n", field[0], fitText(field[1], maxDetailWidth(m.Width)))
+		fmt.Fprintf(&b, detailsRowFmt, field[0], fitText(field[1], maxDetailWidth(m.Width)))
 	}
 	if err, ok := m.LookupErrors[record.PID]; ok {
-		fmt.Fprintf(&b, "\n%s\n", lookupMessage(classifyLookupError(err)))
+		fmt.Fprintf(&b, lookupNoticeFmt, lookupMessage(classifyLookupError(err)))
 	}
 	if m.Status != "" {
-		fmt.Fprintf(&b, "\nStatus: %s\n", m.Status)
+		fmt.Fprintf(&b, statusLineIndentedFmt, m.Status)
 	}
-	b.WriteString("\nEsc Back   K Kill   R Refresh   Q Quit\n")
+	b.WriteString(detailsActions)
 	return b.String()
 }
 
@@ -351,46 +351,46 @@ func (m Model) viewConfirm() string {
 	var b strings.Builder
 	m.writeHeader(&b)
 	record := m.DetailRecord
-	fmt.Fprintf(&b, "\nTerminate process?\n\nPID      %d\nProcess  %s\nPort     %d\n", record.PID, m.processName(record), record.Port)
-	b.WriteString("\nThis will terminate the process.\n")
-	b.WriteString("\nEnter Confirm   Esc Cancel\n")
+	fmt.Fprintf(&b, confirmTitleFmt, record.PID, m.processName(record), record.Port)
+	b.WriteString(confirmWarning)
+	b.WriteString(confirmActions)
 	return b.String()
 }
 
 func (m Model) viewHelp() string {
 	var b strings.Builder
 	m.writeHeader(&b)
-	b.WriteString("\nHow to use PortWatch\n\n")
-	b.WriteString("1. Select a listening port with Up/Down.\n")
-	b.WriteString("2. Press Enter to inspect the process.\n")
-	b.WriteString("3. Press K, then Enter, to terminate after confirmation.\n")
-	b.WriteString("4. PortWatch verifies the PID and port release.\n\n")
-	b.WriteString("Keys\n")
-	b.WriteString("↑↓ Select   Enter Details   / Filter   K Kill\n")
-	b.WriteString("R Refresh   V Views   ? Help   Esc Back   Q Quit\n")
+	b.WriteString(helpPageTitle)
+	b.WriteString(helpStep1)
+	b.WriteString(helpStep2)
+	b.WriteString(helpStep3)
+	b.WriteString(helpStep4)
+	b.WriteString(helpKeysTitle)
+	b.WriteString(helpKeysList)
+	b.WriteString(helpKeysFull)
 	return b.String()
 }
 
 func (m Model) viewViewMenu() string {
 	var b strings.Builder
 	m.writeHeader(&b)
-	b.WriteString("\nChoose a view\n\n")
+	b.WriteString(viewMenuTitle)
 	for _, option := range []struct {
 		key   string
 		label string
 		scope port.Scope
 	}{
-		{key: "L", label: "Listening ports", scope: port.ScopeListening},
-		{key: "C", label: "Active connections", scope: port.ScopeConnections},
-		{key: "A", label: "All TCP records", scope: port.ScopeAll},
+		{key: "L", label: viewOptionListening, scope: port.ScopeListening},
+		{key: "C", label: viewOptionConnection, scope: port.ScopeConnections},
+		{key: "A", label: viewOptionAll, scope: port.ScopeAll},
 	} {
-		marker := " "
+		marker := markerInactive
 		if option.scope == m.Scope {
-			marker = ">"
+			marker = markerActive
 		}
-		fmt.Fprintf(&b, "%s [%s] %s\n", marker, option.key, option.label)
+		fmt.Fprintf(&b, viewMenuRowFmt, marker, option.key, option.label)
 	}
-	b.WriteString("\nL/C/A Select   Esc Back\n")
+	b.WriteString(viewMenuActions)
 	return b.String()
 }
 
@@ -399,12 +399,12 @@ func (m Model) processName(record model.PortInfo) string {
 		return info.Name
 	}
 	if _, failed := m.LookupErrors[record.PID]; failed {
-		return "Unknown"
+		return placeholderUnknown
 	}
 	if strings.TrimSpace(record.ProcessName) != "" {
 		return record.ProcessName
 	}
-	return "Unknown"
+	return placeholderUnknown
 }
 
 // parentChain renders the ancestor line for the details page using the same
@@ -492,12 +492,12 @@ func formatAge(updated time.Time) string {
 	if seconds < 0 {
 		seconds = 0
 	}
-	return fmt.Sprintf("%ds ago", seconds)
+	return fmt.Sprintf(ageSecondsFmt, seconds)
 }
 
 func displayFilter(filter string) string {
 	if strings.TrimSpace(filter) == "" {
-		return "-"
+		return placeholderDash
 	}
 	return filter
 }
@@ -528,12 +528,12 @@ func fitText(value string, width int) string {
 	if width <= 3 {
 		return string(runes[:width])
 	}
-	return string(runes[:width-3]) + "..."
+	return string(runes[:width-3]) + ellipsis
 }
 
 func display(value string) string {
 	if strings.TrimSpace(value) == "" {
-		return "Unknown"
+		return placeholderUnknown
 	}
 	return value
 }

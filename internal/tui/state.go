@@ -57,11 +57,11 @@ func classifyLookupError(err error) lookupState {
 func lookupMessage(state lookupState) string {
 	switch state {
 	case lookupAccessDenied:
-		return "Process information unavailable. Access denied."
+		return lookupAccessDeniedText
 	case lookupExited:
-		return "Process information unavailable. Process exited."
+		return lookupExitedText
 	case lookupUnknown:
-		return "Process information unavailable."
+		return lookupUnavailableText
 	default:
 		return ""
 	}
@@ -70,11 +70,11 @@ func lookupMessage(state lookupState) string {
 func scopeLabel(scope port.Scope) string {
 	switch scope {
 	case port.ScopeConnections:
-		return "CONNECTIONS"
+		return scopeConnectionsText
 	case port.ScopeAll:
-		return "ALL"
+		return scopeAllText
 	default:
-		return "LISTENING"
+		return scopeListeningText
 	}
 }
 
@@ -92,5 +92,5 @@ func modeKey(key string) (port.Scope, bool) {
 }
 
 func unsupportedScopeError(scope port.Scope) error {
-	return fmt.Errorf("%s view is unavailable on this platform: %w", scopeLabel(scope), port.ErrScopeUnsupported)
+	return fmt.Errorf(scopeUnsupportedFmt, scopeLabel(scope), port.ErrScopeUnsupported)
 }
