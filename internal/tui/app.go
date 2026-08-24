@@ -159,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ConfirmKill = false
 			m.Page = m.ConfirmReturn
 			m.Err = value.err
-			m.Status = fmt.Sprintf("Kill failed: %v", value.err)
+			m.Status = fmt.Sprintf(statusKillFailedFmt, value.err)
 			return m, nil
 		}
 		m.Err = nil
