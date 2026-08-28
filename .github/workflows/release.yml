@@ -1,0 +1,35 @@
+# Release pipeline. Pushing a v* tag to GitHub builds all goreleaser targets
+# and publishes the GitHub release, so releases no longer depend on a local
+# goreleaser run. Tags only pushed to the private Gitea remote never reach
+# Actions; always push the tag to github as well.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        # goreleaser walks the tag history to build the changelog.
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.22.x"
+          cache: true
+      - name: Test
+        run: go test ./...
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
