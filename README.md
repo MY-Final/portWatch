@@ -4,7 +4,7 @@
 
 **面向开发者的跨平台端口诊断与进程管理 CLI**
 
-[![version](https://img.shields.io/badge/version-v0.8.0-blue)](https://github.com/MY-Final/portWatch/releases)
+[![version](https://img.shields.io/badge/version-v0.9.0-blue)](https://github.com/MY-Final/portWatch/releases)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-607D8B)](#-平台支持)
 [![dist](https://img.shields.io/badge/dist-single%20binary-2E7D32)](https://github.com/MY-Final/portWatch/releases)
