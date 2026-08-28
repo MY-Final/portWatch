@@ -44,7 +44,7 @@ const (
 	detailsTitle        = "\nProcess Details\n"
 	detailsRowFmt       = "%-20s %s\n"
 	lookupNoticeFmt     = "\n%s\n"
-	detailsActions      = "\nEsc Back   K Kill   R Refresh   Q Quit\n"
+	detailsActions      = "\nEsc Back   K Kill   R Refresh   T Auto-refresh   Q Quit\n"
 	detailsPageLabel    = "Process details"
 	fieldPort           = "Port"
 	fieldProtocol       = "Protocol"
@@ -73,9 +73,9 @@ const (
 	helpStep4      = "4. PortWatch verifies the PID and port release.\n\n"
 	helpKeysTitle  = "Keys\n"
 	helpKeysList   = "↑↓ Select   Enter Details   / Filter   K Kill\n"
-	helpKeysFull   = "R Refresh   V Views   ? Help   Esc Back   Q Quit\n"
+	helpKeysFull   = "R Refresh   T Auto-refresh   V Views   ? Help   Esc Back   Q Quit\n"
 	helpFooterTop  = "\n↑↓ Select (u/j)   Enter Details   / Filter   K Kill\n"
-	helpFooterRest = "R Refresh   V Views   ? Help   Q Quit\n"
+	helpFooterRest = "R Refresh   T Auto-refresh   V Views   ? Help   Q Quit\n"
 )
 
 const (
@@ -91,6 +91,8 @@ const (
 
 const (
 	statusRefreshing       = "Refreshing..."
+	statusAutoRefreshOnFmt = "Auto-refresh on, scanning every %v. Press T to stop."
+	statusAutoRefreshOff   = "Auto-refresh off."
 	statusLoadingFmt       = "Loading %s..."
 	statusRefreshFailedFmt = "Refresh failed: %v"
 	statusKillFailedFmt    = "Kill failed: %v"

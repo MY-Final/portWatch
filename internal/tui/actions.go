@@ -56,6 +56,15 @@ func (m Model) handleListKey(key tea.KeyMsg) (Model, tea.Cmd) {
 	case "r":
 		m.Status = statusRefreshing
 		return m, m.refresh()
+	case "t":
+		m.AutoRefresh = !m.AutoRefresh
+		if !m.AutoRefresh {
+			m.Status = statusAutoRefreshOff
+			return m, nil
+		}
+		m.Status = fmt.Sprintf(statusAutoRefreshOnFmt, autoRefreshInterval)
+		m.refreshInFlight = true
+		return m, tea.Batch(m.refresh(), autoRefreshTick())
 	case "/":
 		m.Filtering = true
 		return m, nil
@@ -117,6 +126,15 @@ func (m Model) handleDetailsKey(key tea.KeyMsg) (Model, tea.Cmd) {
 	case "r":
 		m.Status = statusRefreshing
 		return m, m.refresh()
+	case "t":
+		m.AutoRefresh = !m.AutoRefresh
+		if !m.AutoRefresh {
+			m.Status = statusAutoRefreshOff
+			return m, nil
+		}
+		m.Status = fmt.Sprintf(statusAutoRefreshOnFmt, autoRefreshInterval)
+		m.refreshInFlight = true
+		return m, tea.Batch(m.refresh(), autoRefreshTick())
 	case "?":
 		m.HelpReturn = pageDetails
 		m.Page = pageHelp

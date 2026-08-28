@@ -152,3 +152,14 @@ Phase 11 任务卡已删除。
 | ID | 状态 | 文件 | 结果 |
 | --- | --- | --- | --- |
 | 1201 | **done** | [`phase-12-security/1201-security-audit.md`](phase-12-security/1201-security-audit.md) | [`../docs/security-review.md`](../docs/security-review.md)：2 中 + 1 低已修复（PID 重用身份复核、自删除敌意路径、Exists 最小权限），3 信息级文档化，无高危 |
+
+## V6 之后实现日志（v0.9.0 –）
+
+### v0.9.0 — CLI 表格截断 / 发布自动化 / 版本单源 / TUI 自动刷新
+
+| 主题 | 内容 | Commit |
+| --- | --- | --- |
+| CLI 表格截断 | COMMAND / EXECUTABLE PATH 列 80 字符截断（77+`...`），仅表格渲染层，JSON 保持完整；修复超长命令行把 tabwriter 撑爆导致终端刷空白/黑屏 | `703ab7e` |
+| 发布自动化 | tag 推送触发 goreleaser Release 工作流（已用一次性 tag 实测通过） | `4d7c2b5` |
+| 版本单源 | flags.go 不再持有版本号副本，仅 main.go 字面量（ldflags 契约）；main_test 守护两条契约 | `121a535` |
+| TUI 自动刷新 | `T` 键开关（默认关），2s 轮询复用 refresh 通道，in-flight 防重叠；portsLoadedMsg 不再重置页面，后台刷新不打断详情/确认页 | 本次 |

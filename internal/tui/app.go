@@ -49,7 +49,14 @@ type Model struct {
 	ConfirmKill   bool
 	ConfirmReturn pageMode
 	HelpReturn    pageMode
+	AutoRefresh   bool
+	// refreshInFlight keeps the polling loop from stacking scans when one
+	// refresh is slower than autoRefreshInterval.
+	refreshInFlight bool
 }
+
+// autoRefreshInterval paces the optional polling loop toggled with T.
+const autoRefreshInterval = 2 * time.Second
 
 type portsLoadedMsg struct {
 	ports        []model.PortInfo
@@ -60,6 +67,14 @@ type portsLoadedMsg struct {
 }
 type portsFailedMsg struct{ err error }
 type killDoneMsg struct{ err error }
+
+// autoRefreshTickMsg fires on every autoRefreshInterval while the polling
+// loop is enabled; each tick triggers one scan and schedules the next tick.
+type autoRefreshTickMsg struct{}
+
+func autoRefreshTick() tea.Cmd {
+	return tea.Tick(autoRefreshInterval, func(time.Time) tea.Msg { return autoRefreshTickMsg{} })
+}
 
 func New(scanner port.Scanner, manager process.Manager) Model {
 	return NewWithPort(scanner, manager, 0)
@@ -133,6 +148,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(value)
 	case tea.WindowSizeMsg:
 		m.Width, m.Height = value.Width, value.Height
+	case autoRefreshTickMsg:
+		if !m.AutoRefresh {
+			return m, nil
+		}
+		if m.refreshInFlight {
+			return m, autoRefreshTick()
+		}
+		m.refreshInFlight = true
+		return m, tea.Batch(m.refresh(), autoRefreshTick())
 	case portsLoadedMsg:
 		previousKey := m.currentKey()
 		previousIndex := m.Selected
@@ -144,16 +168,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Err = nil
 		m.Status = m.NextStatus
 		m.NextStatus = ""
+		m.refreshInFlight = false
 		sortPorts(m.Ports)
 		m.Selected = restoreSelection(m.Ports, previousKey, previousIndex)
 		m.SelectedKey = m.currentKey()
-		m.Page = pageList
-		m.Detail = ""
-		m.ConfirmKill = false
 	case portsFailedMsg:
 		m.NextStatus = ""
 		m.Err = value.err
 		m.Status = fmt.Sprintf(statusRefreshFailedFmt, value.err)
+		m.refreshInFlight = false
 	case killDoneMsg:
 		if value.err != nil {
 			m.ConfirmKill = false

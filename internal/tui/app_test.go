@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -386,5 +387,141 @@ func TestV6DetailsShowParentChain(t *testing.T) {
 	// p41's parent is p40, p40's parent is p39, ... walk stops at the cap.
 	if strings.Contains(view, "(9)") {
 		t.Fatalf("chain exceeded the hop cap:\n%s", view)
+	}
+}
+
+type autoRefreshScanner struct {
+	listCalls int
+}
+
+func (s *autoRefreshScanner) List(context.Context) ([]model.PortInfo, error) {
+	s.listCalls++
+	return []model.PortInfo{{Port: 8080, Protocol: "TCP", State: "LISTENING", PID: 42}}, nil
+}
+func (s *autoRefreshScanner) Port(context.Context, int) ([]model.PortInfo, error) { return nil, nil }
+
+func drainCmd(t *testing.T, cmd tea.Cmd) []tea.Msg {
+	t.Helper()
+	if cmd == nil {
+		return nil
+	}
+	result := cmd()
+	if batch, ok := result.(tea.BatchMsg); ok {
+		msgs := make([]tea.Msg, 0, len(batch))
+		for _, sub := range batch {
+			msgs = append(msgs, drainCmd(t, sub)...)
+		}
+		return msgs
+	}
+	return []tea.Msg{result}
+}
+
+func TestToggleKeyTStartsAndStopsAutoRefresh(t *testing.T) {
+	m := Model{Scope: port.ScopeListening}
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if !m.AutoRefresh || cmd == nil {
+		t.Fatalf("t toggle = auto=%v cmd=%v, want on with a scheduled scan", m.AutoRefresh, cmd)
+	}
+	if !strings.Contains(m.Status, "Auto-refresh on") {
+		t.Fatalf("status = %q, want auto-refresh feedback", m.Status)
+	}
+	msgs := drainCmd(t, cmd)
+	var sawTick bool
+	for _, msg := range msgs {
+		if _, ok := msg.(autoRefreshTickMsg); ok {
+			sawTick = true
+		}
+	}
+	if !sawTick {
+		t.Fatalf("toggle-on produced %v, want a tick plus a scan", msgs)
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if m.AutoRefresh || cmd != nil {
+		t.Fatalf("second t toggle = auto=%v cmd=%v, want off with no command", m.AutoRefresh, cmd)
+	}
+	if !strings.Contains(m.Status, "Auto-refresh off") {
+		t.Fatalf("status = %q, want off feedback", m.Status)
+	}
+}
+
+func TestAutoRefreshTickScansAndReschedules(t *testing.T) {
+	scanner := &autoRefreshScanner{}
+	m := Model{Scanner: scanner, AutoRefresh: true}
+	updated, cmd := m.Update(autoRefreshTickMsg{})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("tick with auto-refresh on produced no command")
+	}
+	msgs := drainCmd(t, cmd)
+	loaded := 0
+	ticked := false
+	for _, msg := range msgs {
+		switch value := msg.(type) {
+		case portsLoadedMsg:
+			loaded++
+			updated, _ = updated.Update(value)
+		case autoRefreshTickMsg:
+			ticked = true
+		}
+	}
+	m = updated.(Model)
+	if loaded != 1 || !ticked {
+		t.Fatalf("tick produced loaded=%d ticked=%v, want one scan and the next tick", loaded, ticked)
+	}
+	if scanner.listCalls != 1 {
+		t.Fatalf("List() calls = %d, want 1", scanner.listCalls)
+	}
+	if m.refreshInFlight {
+		t.Fatal("refresh still marked in flight after the load")
+	}
+}
+
+func TestAutoRefreshSkipsScanWhileOneIsInFlight(t *testing.T) {
+	scanner := &autoRefreshScanner{}
+	m := Model{Scanner: scanner, AutoRefresh: true, refreshInFlight: true}
+	updated, cmd := m.Update(autoRefreshTickMsg{})
+	m = updated.(Model)
+	msgs := drainCmd(t, cmd)
+	for _, msg := range msgs {
+		if _, ok := msg.(portsLoadedMsg); ok {
+			t.Fatal("scan started while another refresh was in flight")
+		}
+	}
+	if scanner.listCalls != 0 {
+		t.Fatalf("List() calls = %d, want 0", scanner.listCalls)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("msgs = %v, want only the rescheduled tick", msgs)
+	}
+}
+
+func TestAutoRefreshOffIgnoresStrayTick(t *testing.T) {
+	scanner := &autoRefreshScanner{}
+	m := Model{Scanner: scanner}
+	updated, cmd := m.Update(autoRefreshTickMsg{})
+	if cmd != nil {
+		t.Fatalf("tick with auto-refresh off produced %v, want nil", cmd)
+	}
+	if scanner.listCalls != 0 {
+		t.Fatalf("List() calls = %d, want 0", scanner.listCalls)
+	}
+	_ = updated
+}
+
+func TestLoadedRefreshKeepsTheCurrentPage(t *testing.T) {
+	m := Model{
+		Page:         pageDetails,
+		DetailRecord: model.PortInfo{Port: 8080, Protocol: "TCP", PID: 42},
+		Detail:       "Process details",
+	}
+	updated, _ := m.Update(portsLoadedMsg{
+		ports:     []model.PortInfo{{Port: 8080, Protocol: "TCP", State: "LISTENING", PID: 42}},
+		updatedAt: time.Now(),
+	})
+	m = updated.(Model)
+	if m.Page != pageDetails || m.Detail == "" {
+		t.Fatalf("loaded refresh moved to page=%d detail=%q, want details preserved", m.Page, m.Detail)
 	}
 }
