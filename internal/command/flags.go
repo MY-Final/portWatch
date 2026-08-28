@@ -9,8 +9,10 @@ import (
 	"time"
 )
 
-// Version is overridden by the release build through main.version.
-var Version = "0.9.0"
+// Version is injected by main from its ldflags-overridden version string.
+// The empty default keeps this package from carrying a second copy of the
+// release number that can drift from the one goreleaser stamps into main.
+var Version = ""
 
 // BinaryName is the name portwatch was invoked as, so a copy or link named
 // pw.exe prints pw in usage and error prefixes. main sets it from argv[0].
