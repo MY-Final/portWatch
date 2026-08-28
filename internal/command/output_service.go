@@ -33,7 +33,7 @@ func RenderPortsWithServices(w io.Writer, ports []model.PortInfo, infos map[int]
 		if detector != nil {
 			serviceInfo = detector.Detect(record, info)
 		}
-		if _, err := fmt.Fprintf(tw, "%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", record.Port, display(record.Protocol), display(record.State), record.PID, display(info.Name), display(info.Command), display(info.Executable), display(serviceInfo.Name)); err != nil {
+		if _, err := fmt.Fprintf(tw, "%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", record.Port, display(record.Protocol), display(record.State), record.PID, display(info.Name), display(fitCell(info.Command)), display(fitCell(info.Executable)), display(serviceInfo.Name)); err != nil {
 			return err
 		}
 	}

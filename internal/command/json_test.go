@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/MY-Final/portWatch/internal/service"
@@ -73,5 +74,34 @@ func TestRenderJSONWithServicesIncludesDetection(t *testing.T) {
 	}
 	if len(response.Ports) != 1 || response.Ports[0].Service == nil || response.Ports[0].Service.Name != "Vite" {
 		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestRenderJSONWithServicesKeepsLongFieldsComplete(t *testing.T) {
+	longCommand := strings.Repeat("c", 81)
+	longExecutable := `C:\` + strings.Repeat("p", 5000) + `\app.exe`
+	ports := []model.PortInfo{{Port: 80, Protocol: "TCP", State: "LISTENING", PID: 7}}
+	infos := map[int]model.ProcessInfo{
+		7: {PID: 7, Name: "app.exe", Command: longCommand, Executable: longExecutable},
+	}
+	var out bytes.Buffer
+	if err := RenderJSONWithServices(&out, ports, infos, service.Rules{}); err != nil {
+		t.Fatalf("RenderJSONWithServices() error = %v", err)
+	}
+	var response model.PortsResponse
+	if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+		t.Fatalf("JSON decode error = %v", err)
+	}
+	if len(response.Ports) != 1 {
+		t.Fatalf("ports = %+v", response.Ports)
+	}
+	if response.Ports[0].Command != longCommand {
+		t.Fatalf("JSON command was altered: len=%d, want %d", len(response.Ports[0].Command), len(longCommand))
+	}
+	if response.Ports[0].Executable != longExecutable {
+		t.Fatalf("JSON executable was altered: len=%d, want %d", len(response.Ports[0].Executable), len(longExecutable))
+	}
+	if strings.Contains(out.String(), "...") {
+		t.Fatal("JSON output contains an ellipsis; table truncation leaked into JSON")
 	}
 }

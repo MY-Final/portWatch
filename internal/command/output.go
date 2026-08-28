@@ -15,6 +15,21 @@ import (
 const outputHeader = "PORT\tPROTOCOL\tSTATE\tPID\tPROCESS NAME\tCOMMAND\tEXECUTABLE PATH\n"
 const outputHeaderWithService = "PORT\tPROTOCOL\tSTATE\tPID\tPROCESS NAME\tCOMMAND\tEXECUTABLE PATH\tSERVICE\n"
 
+// maxTableColumnRunes caps the COMMAND and EXECUTABLE PATH cells. tabwriter
+// pads every row to the widest cell in each column, so one very long command
+// line would otherwise stretch the whole table into megabytes of padding and
+// stall slow terminals.
+const maxTableColumnRunes = 80
+
+// fitCell truncates a table cell to maxTableColumnRunes with an ellipsis.
+func fitCell(value string) string {
+	runes := []rune(value)
+	if len(runes) <= maxTableColumnRunes {
+		return value
+	}
+	return string(runes[:maxTableColumnRunes-3]) + "..."
+}
+
 // RenderPorts writes a deterministic table of port records to w. The input
 // slice is copied before sorting so rendering never changes caller-owned data.
 func RenderPorts(w io.Writer, ports []model.PortInfo) error {
@@ -74,7 +89,7 @@ func renderProcess(w io.Writer, process model.ProcessInfo, port model.PortInfo, 
 		info := detector.Detect(port, process)
 		_, err := fmt.Fprintf(tw, "%d\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n",
 			port.Port, display(port.Protocol), display(port.State), port.PID,
-			display(name), display(process.Command), display(process.Executable), display(info.Name))
+			display(name), display(fitCell(process.Command)), display(fitCell(process.Executable)), display(info.Name))
 		if err != nil {
 			return err
 		}
@@ -87,7 +102,7 @@ func renderProcess(w io.Writer, process model.ProcessInfo, port model.PortInfo, 
 func writeRow(w io.Writer, port int, protocol, state string, pid int, name, command, executable string) error {
 	_, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 		strconv.Itoa(port), display(protocol), display(state), strconv.Itoa(pid),
-		display(name), display(command), display(executable))
+		display(name), display(fitCell(command)), display(fitCell(executable)))
 	return err
 }
 

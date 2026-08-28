@@ -494,3 +494,28 @@ func TestResolveProcessInfosRunsConcurrently(t *testing.T) {
 		t.Fatal("resolveProcessInfos did not finish after release")
 	}
 }
+
+func TestRunListKeepsProcessErrorsOnStderr(t *testing.T) {
+	deps := Dependencies{
+		Scanner: rangeScanner{ports: []model.PortInfo{{Port: 135, Protocol: "TCP", State: "LISTENING", PID: 992}}},
+		Manager: failingInfoManager{},
+	}
+	var stdout, stderr strings.Builder
+	if code := run(context.Background(), nil, deps, strings.NewReader(""), &stdout, &stderr); code != ExitSuccess {
+		t.Fatalf("run() code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "process information unavailable") {
+		t.Fatalf("stderr = %q, want the process-info error", stderr.String())
+	}
+	if !strings.HasPrefix(stdout.String(), "PORT") {
+		t.Fatalf("stdout = %q, want the table header first", stdout.String())
+	}
+	for _, leaked := range []string{"unavailable", "permission", "denied"} {
+		if strings.Contains(stdout.String(), leaked) {
+			t.Fatalf("stdout = %q, must not contain error text %q", stdout.String(), leaked)
+		}
+	}
+	if !strings.Contains(stdout.String(), "135") || !strings.Contains(stdout.String(), "Unknown") {
+		t.Fatalf("stdout = %q, want the data row with Unknown service", stdout.String())
+	}
+}
